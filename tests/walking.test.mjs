@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { evaluateWalk } from '../src/walking.ts'
+import { evaluateWalk } from '../src/services/walking.service.ts'
 
 test('checks both per-leg and daily walking limits', () => {
   const legs = [11, 13, 20].map((minutes) => ({ fromId: 'a', toId: 'b', minutes, meters: 100 }))

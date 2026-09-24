@@ -1,4 +1,4 @@
-export type WalkLeg = { fromId: string; toId: string; minutes: number; meters: number }
+import type { WalkLeg } from '../models/walking.ts'
 
 export function evaluateWalk(
   legs: WalkLeg[],

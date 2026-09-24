@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isWorkspace } from './src/trips.ts'
+import { isTripWorkspaceDto } from './src/dto/trip-workspace.dto.ts'
 
 const coordinatePattern = /^-?\d{1,3}(?:\.\d{1,6})?,-?\d{1,2}(?:\.\d{1,6})?$/
 const defaultDatabasePath = fileURLToPath(new URL('./data/trips.sqlite', import.meta.url))
@@ -34,7 +34,7 @@ export function createTripApi(database) {
       if (!row) return reply(404, { error: 'SQLite 尚未建立旅程資料。' })
       try {
         const workspace = JSON.parse(row.data_json)
-        if (!isWorkspace(workspace)) return reply(500, { error: 'SQLite 旅程資料格式不正確。' })
+        if (!isTripWorkspaceDto(workspace)) return reply(500, { error: 'SQLite 旅程資料格式不正確。' })
         return reply(200, workspace)
       } catch (error) {
         return reply(500, { error: error instanceof Error ? `讀取 SQLite 旅程資料失敗：${error.message}` : '讀取 SQLite 旅程資料失敗。' })
@@ -57,7 +57,7 @@ export function createTripApi(database) {
     } catch {
       return reply(400, { error: '請求內容不是有效 JSON。' })
     }
-    if (!isWorkspace(workspace)) return reply(400, { error: '旅程資料格式不正確，未寫入 SQLite。' })
+    if (!isTripWorkspaceDto(workspace)) return reply(400, { error: '旅程資料格式不正確，未寫入 SQLite。' })
     try {
       writeWorkspace.run(JSON.stringify(workspace))
       return reply(200, { saved: true })

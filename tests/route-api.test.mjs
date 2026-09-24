@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
 import { createTripApi, walkApi } from '../route-api.mjs'
-import { defineTrip } from '../src/trips.ts'
+import { defineTrip } from '../src/services/trip.service.ts'
 
 async function request(body) {
   const req = { url: '/api/walk', method: 'POST', async *[Symbol.asyncIterator]() { yield JSON.stringify(body) } }
@@ -40,6 +40,7 @@ function testWorkspace() {
     startDate: '2026-05-15',
     endDate: '2026-05-15',
     timeZone: 'Asia/Shanghai',
+    notepad: '測試備忘：集合地點待確認',
   })
   return { trips: [trip], activeTripId: trip.id }
 }

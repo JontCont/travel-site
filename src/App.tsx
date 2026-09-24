@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { evaluateWalk, type WalkLeg } from './walking'
-import { isWorkspace, listDates, loadWorkspace, type Trip, type TripWorkspace } from './trips'
-import './App.css'
+import type { Trip, TripWorkspace } from './models/trip'
+import type { WalkLeg } from './models/walking'
+import { getTripStatus, sortTripsNearToFar, type TripStatus } from './services/date.service'
+import { listDates } from './services/trip.service'
+import { loadTripWorkspace, saveWorkspace } from './services/trip-workspace.service'
+import { evaluateWalk } from './services/walking.service'
+import './App.scss'
 
 function amapSearch(keyword: string, city: string) {
   return `https://uri.amap.com/search?keyword=${encodeURIComponent(keyword)}&city=${encodeURIComponent(city)}`
@@ -13,26 +17,10 @@ function prettyDate(date: string, options: Intl.DateTimeFormatOptions = {
   return new Intl.DateTimeFormat('zh-TW', { ...options, timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`))
 }
 
-function currentDateInTimeZone(timeZone: string) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date())
-  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? ''
-  return `${value('year')}-${value('month')}-${value('day')}`
-}
-
-async function writeWorkspace(workspace: TripWorkspace) {
-  const response = await fetch('/api/workspace', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(workspace),
-  })
-  if (response.ok) return
-  const payload: unknown = await response.json().catch(() => null)
-  const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
-    ? payload.error
-    : `SQLite 儲存失敗（HTTP ${response.status}）。`
-  throw new Error(message)
+const tripStatusLabels: Record<TripStatus, string> = {
+  scheduled: '排定',
+  'in-progress': '進行',
+  ended: '結束',
 }
 
 function App() {
@@ -41,7 +29,8 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'itinerary' | 'flights' | 'travelers'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad'>('overview')
+  const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
   const [limits, setLimits] = useState({ leg: '', daily: '' })
   const [includeHotel, setIncludeHotel] = useState(false)
@@ -55,22 +44,15 @@ function App() {
   const saveVersion = useRef(0)
 
   useEffect(() => {
+    const timer = window.setInterval(() => setStatusTime(new Date()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     async function loadTripData() {
       try {
-        const response = await fetch('/api/workspace')
-        let loadedWorkspace: TripWorkspace
-        if (response.status === 404) {
-          const oldWorkspace = loadWorkspace(localStorage)
-          if (!oldWorkspace) throw new Error('SQLite 尚無旅程資料，且找不到可遷移的舊版瀏覽器資料。')
-          await writeWorkspace(oldWorkspace)
-          loadedWorkspace = oldWorkspace
-        } else {
-          if (!response.ok) throw new Error(`讀取 SQLite 旅程資料失敗（HTTP ${response.status}）。`)
-          const value: unknown = await response.json()
-          if (!isWorkspace(value)) throw new Error('SQLite 回傳的旅程資料格式不正確。')
-          loadedWorkspace = value
-        }
+        const loadedWorkspace = await loadTripWorkspace(localStorage)
         if (!cancelled) {
           setWorkspace(loadedWorkspace)
           setDay(loadedWorkspace.trips.find((trip) => trip.id === loadedWorkspace.activeTripId)?.startDate ?? '')
@@ -91,7 +73,7 @@ function App() {
     const snapshot = workspace
     saveSequence.current = saveSequence.current
       .catch(() => undefined)
-      .then(() => writeWorkspace(snapshot))
+      .then(() => saveWorkspace(snapshot))
       .then(() => {
         if (saveVersion.current === version) setSaveError('')
       })
@@ -236,19 +218,49 @@ function App() {
 
   const status = evaluateWalk(legs, Number(limits.leg), Number(limits.daily),
     Math.max(0, stops.length + (includeHotel ? 1 : -1)))
-  const journeyStatus = trip && trip.endDate < currentDateInTimeZone(trip.timeZone)
-    ? 'PAST JOURNEY'
-    : 'UPCOMING JOURNEY'
 
   if (loading) return <main className="load-error">正在讀取本機 SQLite 旅程資料…</main>
   if (loadError || !workspace || !trip) return <main className="load-error" role="alert"><h1>無法開啟旅程</h1><p>{loadError || '目前沒有有效的旅程資料。'}</p><p>資料庫位於專案的 `data/trips.sqlite`；請先確認檔案存在或恢復備份。</p></main>
+  const activeTripId = trip.id
+  const activeTripStatus = getTripStatus(trip.startDate, trip.endDate, trip.timeZone, statusTime)
+  const currentTrips = workspace.trips.filter((item) =>
+    getTripStatus(item.startDate, item.endDate, item.timeZone, statusTime) !== 'ended')
+  const archivedTrips = workspace.trips.filter((item) =>
+    getTripStatus(item.startDate, item.endDate, item.timeZone, statusTime) === 'ended')
+
+  function renderTripLinks(trips: Trip[]) {
+    return trips.map((item) => {
+      const itemStatus = getTripStatus(item.startDate, item.endDate, item.timeZone, statusTime)
+      return <button key={item.id} className={`trip-link ${item.id === activeTripId ? 'active' : ''}`} onClick={() => changeTrip(item.id)}>
+        <strong><span className="trip-link-title">{item.title}</span><span className={`trip-status-badge status-${itemStatus}`}>{tripStatusLabels[itemStatus]}</span></strong>
+        <small>{item.destination} · {prettyDate(item.startDate, { month: 'numeric', day: 'numeric' })}</small>
+      </button>
+    })
+  }
+
+  function renderTripCards(trips: Trip[]) {
+    if (!trips.length) {
+      return <div className="empty"><span>◷</span><strong>目前沒有{tab === 'archive' ? '已結束' : '排定或進行中'}的旅程</strong></div>
+    }
+    return <div className="trip-cards">{trips.map((item, index) => {
+      const tripDays = listDates(item.startDate, item.endDate)
+      const itemStatus = getTripStatus(item.startDate, item.endDate, item.timeZone, statusTime)
+      const places = Object.values(item.days).reduce((total, stopsForDay) => total + stopsForDay.length, 0)
+      return <button className="trip-card" key={item.id} onClick={() => changeTrip(item.id)}>
+        <div className={`trip-card-art art-${index % 4}`}><span>{item.country || 'TRAVEL PLAN'}</span><strong>{item.destination}</strong><small>{String(index + 1).padStart(2, '0')} / JOURNEY</small></div>
+        <div className="trip-card-body"><div className="trip-card-title"><h3>{item.title}</h3><span className={`trip-status-badge status-${itemStatus}`}>{tripStatusLabels[itemStatus]}</span></div><p>{prettyDate(item.startDate, { year: 'numeric', month: 'long', day: 'numeric' })} — {prettyDate(item.endDate, { year: 'numeric', month: 'long', day: 'numeric' })}</p><div className="trip-card-meta"><span>{tripDays.length} 天 {Math.max(0, tripDays.length - 1)} 夜</span><span>{places} 個行程項目</span><span>{item.timeZone}</span></div></div>
+      </button>
+    })}</div>
+  }
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <button className="brand" aria-label="途間首頁：我的旅程" onClick={() => setTab('overview')}><span className="brand-mark">✳</span><span>途間 <small>TRIP STUDIO</small></span></button>
-        <div className="nav-label">你的旅程 <span className="trip-count">{workspace.trips.length}</span></div>
-        <div className="trip-list">{workspace.trips.map((item) => <button key={item.id} className={`trip-link ${item.id === trip.id ? 'active' : ''}`} onClick={() => changeTrip(item.id)}><strong>{item.title}</strong><small>{item.destination} · {prettyDate(item.startDate, { month: 'numeric', day: 'numeric' })}</small></button>)}</div>
+        <div className="nav-label">你的旅程 <span className="trip-count">{currentTrips.length}</span></div>
+        <button className={`side-link ${tab === 'timeline' ? 'active' : ''}`} onClick={() => setTab('timeline')}>◷ <span>旅程時間軸</span></button>
+        <div className="trip-list">{renderTripLinks(currentTrips.slice(0, 3))}</div>
+        {currentTrips.length > 3 && <button className="trip-list-more" onClick={() => setTab('overview')}>瀏覽更多</button>}
         <div className="nav-label nav-section">這趟旅程</div>
         <button className={`side-link ${tab === 'itinerary' ? 'active' : ''}`} onClick={() => setTab('itinerary')}>▦ <span>每日行程</span></button>
         <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => setTab('flights')}>✈ <span>航班與住宿</span></button>
@@ -259,22 +271,35 @@ function App() {
         </div>
       </aside>
       <main className="main">
-        <header className="topbar">{tab !== 'overview' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}<span className="topbar-title">{tab === 'overview' ? '我的旅程' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span><span className="top-right">{workspace.trips.length} 趟旅程 · 本機 SQLite</span></header>
+        <header className="topbar">{tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}<span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span><span className="top-right">{workspace.trips.length} 趟旅程 · 本機 SQLite</span></header>
         <div className="content">
           {saveError && <p className="notice danger" role="alert">SQLite 儲存失敗：{saveError}</p>}
-          {tab === 'overview' ? <section className="trips-overview">
-            <div className="eyebrow">YOUR TRAVEL COLLECTION <span className="eyebrow-rule" /></div>
-            <div className="section-heading"><div><span className="overline">TRIP LIBRARY · {workspace.trips.length} TRIPS</span><h2>每一趟旅程，都從這裡開始。</h2><p className="overview-caption">管理你的出國計畫，選取旅程以查看每日安排。</p></div></div>
-            <div className="trip-cards">{workspace.trips.map((item, index) => {
-              const tripDays = listDates(item.startDate, item.endDate)
-              const places = Object.values(item.days).reduce((total, stopsForDay) => total + stopsForDay.length, 0)
-              return <button className="trip-card" key={item.id} onClick={() => changeTrip(item.id)}>
-                <div className={`trip-card-art art-${index % 4}`}><span>{item.country || 'TRAVEL PLAN'}</span><strong>{item.destination}</strong><small>{String(index + 1).padStart(2, '0')} / JOURNEY</small></div>
-                <div className="trip-card-body"><div className="trip-card-title"><h3>{item.title}</h3><span>查看旅程 ↗</span></div><p>{prettyDate(item.startDate, { year: 'numeric', month: 'long', day: 'numeric' })} — {prettyDate(item.endDate, { year: 'numeric', month: 'long', day: 'numeric' })}</p><div className="trip-card-meta"><span>{tripDays.length} 天 {Math.max(0, tripDays.length - 1)} 夜</span><span>{places} 個行程項目</span><span>{item.timeZone}</span></div></div>
-              </button>
-            })}</div>
+          {tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
+            <div className="eyebrow">MY TRIPS <span className="eyebrow-rule" /></div>
+            <nav className="tabs home-tabs" aria-label="旅程總覽檢視">
+              <button className={tab === 'overview' ? 'selected' : ''} onClick={() => setTab('overview')}>旅程卡片</button>
+              <button className={tab === 'timeline' ? 'selected' : ''} onClick={() => setTab('timeline')}>旅程時間軸</button>
+              <button className={tab === 'archive' ? 'selected' : ''} onClick={() => setTab('archive')}>封存</button>
+            </nav>
+            <div className="section-heading"><div><span className="overline">旅程總覽 · {workspace.trips.length} 趟</span><h2>每一趟旅程，都從這裡開始。</h2><p className="overview-caption">管理你的出國計畫，選取旅程以查看每日安排。</p></div></div>
+            {tab === 'overview' && renderTripCards(currentTrips)}
+            {tab === 'timeline' && <div className="journey-timeline">
+              {sortTripsNearToFar(workspace.trips, statusTime).map((item) => {
+                const itemStatus = getTripStatus(item.startDate, item.endDate, item.timeZone, statusTime)
+                return <button className="journey-timeline-entry" key={item.id} onClick={() => changeTrip(item.id)}>
+                  <span className="journey-timeline-period"><strong>{item.startDate.slice(0, 4)}</strong><small>{Number(item.startDate.slice(5, 7))} 月</small></span>
+                  <span className="journey-timeline-marker" aria-hidden="true" />
+                  <span className="journey-timeline-card">
+                    <span className="journey-timeline-heading"><strong>{item.destination}</strong><span className={`trip-status-badge status-${itemStatus}`}>{tripStatusLabels[itemStatus]}</span></span>
+                    <span className="journey-timeline-title">{item.title}</span>
+                    <span className="journey-timeline-date">{prettyDate(item.startDate, { year: 'numeric', month: 'long', day: 'numeric' })} — {prettyDate(item.endDate, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  </span>
+                </button>
+              })}
+            </div>}
+            {tab === 'archive' && renderTripCards(archivedTrips)}
           </section> : <>
-          <div className="eyebrow">{journeyStatus} <span className="eyebrow-rule" /></div>
+          <div className="eyebrow"><span className={`trip-status-badge status-${activeTripStatus}`}>{tripStatusLabels[activeTripStatus]}</span><span className="eyebrow-rule" /></div>
           <section className="hero">
             <div className="hero-content">
               <div className="hero-kicker">{trip.country || trip.destination} <span>✦</span> {dates.length} 天 {Math.max(0, dates.length - 1)} 夜</div>
@@ -294,6 +319,7 @@ function App() {
             <button className={tab === 'itinerary' ? 'selected' : ''} onClick={() => setTab('itinerary')}>每日行程</button>
             <button className={tab === 'flights' ? 'selected' : ''} onClick={() => setTab('flights')}>航班與住宿</button>
             <button className={tab === 'travelers' ? 'selected' : ''} onClick={() => setTab('travelers')}>旅客與座位</button>
+            <button className={tab === 'notepad' ? 'selected' : ''} onClick={() => setTab('notepad')}>記事本</button>
           </nav>
           {tab === 'itinerary' && <>
             <div className="section-heading"><div><span className="overline">YOUR ITINERARY</span><h2>每天，都有新的風景。</h2></div><span className="muted">當地時間 · {trip.timeZone}</span></div>
@@ -387,6 +413,19 @@ function App() {
             </div>)}
             {!trip.travelers.length && <div className="empty"><span>♙</span><strong>尚未提供旅客資料</strong></div>}
           </div>}
+          {tab === 'notepad' && <section className="notepad-panel">
+            <div className="section-heading"><div><span className="overline">TRIP NOTES</span><h2>旅程記事本</h2></div></div>
+            <p className="notepad-description">貼上這趟旅程需要留存的資訊、備忘或確認事項。</p>
+            <label className="visually-hidden" htmlFor="trip-notepad">記事本內容</label>
+            <textarea
+              id="trip-notepad"
+              className="notepad-editor"
+              value={trip.notepad ?? ''}
+              onChange={(event) => updateTrip((current) => ({ ...current, notepad: event.target.value }))}
+              placeholder="在這裡貼上或輸入記事…"
+            />
+            <div className="notepad-footer"><span>自動保存至本機 SQLite</span><span>{(trip.notepad ?? '').length} 字元</span></div>
+          </section>}
           </>}
         </div>
       </main>

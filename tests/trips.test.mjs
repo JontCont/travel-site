@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { defineTrip, isWorkspace, listDates, loadWorkspace } from '../src/trips.ts'
+import { isTripWorkspaceDto } from '../src/dto/trip-workspace.dto.ts'
+import { getTripStatus, sortTripsNearToFar } from '../src/services/date.service.ts'
+import { defineTrip, listDates } from '../src/services/trip.service.ts'
+import { loadWorkspace } from '../src/services/trip-workspace.service.ts'
 
 function memoryStorage(entries = {}) {
   const data = new Map(Object.entries(entries))
@@ -43,6 +46,28 @@ test('generates destination-local dates without time-zone shifts', () => {
   assert.deepEqual(listDates('2027-03-28', '2027-03-27'), [])
 })
 
+test('classifies trip timing by the destination-local current date', () => {
+  const startDate = '2026-10-07'
+  const endDate = '2026-10-11'
+  const timeZone = 'Asia/Shanghai'
+  assert.equal(getTripStatus(startDate, endDate, timeZone, new Date('2026-10-06T15:59:59Z')), 'scheduled')
+  assert.equal(getTripStatus(startDate, endDate, timeZone, new Date('2026-10-06T16:00:00Z')), 'in-progress')
+  assert.equal(getTripStatus(startDate, endDate, timeZone, new Date('2026-10-11T15:59:59Z')), 'in-progress')
+  assert.equal(getTripStatus(startDate, endDate, timeZone, new Date('2026-10-11T16:00:00Z')), 'ended')
+})
+
+test('sorts trips from current and nearest upcoming to ended trips', () => {
+  const trips = [
+    { id: 'old', startDate: '2025-05-01', endDate: '2025-05-05', timeZone: 'Asia/Shanghai' },
+    { id: 'far', startDate: '2027-03-01', endDate: '2027-03-05', timeZone: 'Asia/Shanghai' },
+    { id: 'near', startDate: '2026-10-07', endDate: '2026-10-11', timeZone: 'Asia/Shanghai' },
+    { id: 'current', startDate: '2026-09-24', endDate: '2026-09-24', timeZone: 'Asia/Shanghai' },
+    { id: 'recent', startDate: '2026-09-18', endDate: '2026-09-20', timeZone: 'Asia/Shanghai' },
+  ]
+  const sorted = sortTripsNearToFar(trips, new Date('2026-09-24T04:00:00Z'))
+  assert.deepEqual(sorted.map(({ id }) => id), ['current', 'near', 'far', 'recent', 'old'])
+})
+
 test('validates stop time points, duration ranges, and per-person baggage counts', () => {
   const trip = makeTrip({
     days: {
@@ -76,11 +101,21 @@ test('validates stop time points, duration ranges, and per-person baggage counts
   assert.throws(() => makeTrip({ checkedBagPieces: -1 }), /資料無效/)
 })
 
-test('accepts only complete workspaces with one valid active trip', () => {
+test('accepts only complete workspace DTOs with one valid active trip', () => {
   const trip = makeTrip()
-  assert.equal(isWorkspace({ trips: [trip], activeTripId: trip.id }), true)
-  assert.equal(isWorkspace({ trips: [trip], activeTripId: 'missing' }), false)
-  assert.equal(isWorkspace({ trips: [trip, trip], activeTripId: trip.id }), false)
+  assert.equal(isTripWorkspaceDto({ trips: [trip], activeTripId: trip.id }), true)
+  assert.equal(isTripWorkspaceDto({ trips: [trip], activeTripId: 'missing' }), false)
+  assert.equal(isTripWorkspaceDto({ trips: [trip, trip], activeTripId: trip.id }), false)
+})
+
+test('persists per-trip notepad text and validates its DTO type', () => {
+  const trip = makeTrip({ notepad: '訂位代碼：ABC123\n集合地點待確認' })
+  assert.equal(trip.notepad, '訂位代碼：ABC123\n集合地點待確認')
+  assert.equal(isTripWorkspaceDto({ trips: [trip], activeTripId: trip.id }), true)
+  assert.equal(isTripWorkspaceDto({
+    trips: [{ ...trip, notepad: 123 }],
+    activeTripId: trip.id,
+  }), false)
 })
 
 test('loads an existing browser workspace as a one-time SQLite migration source', () => {
