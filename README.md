@@ -16,9 +16,7 @@ GitHub Pages 只能託管靜態檔案，無法執行此專案需要的 Node API 
 
 - 複製 `.env.example` 為 `.env`，設定彼此不同、至少 16 個字元的隨機 `TRIP_VIEW_CODE` 與 `TRIP_ADMIN_CODE`。不要使用已在聊天中貼出的短碼。
 - 將 `TRIP_IMAGE` 改成 `ghcr.io/<GitHub擁有者>/<repository>:latest`；GitHub Actions 會在 `main` 分支的檢查全部通過後，自動發布此 GHCR 映像。
-- `TRIP_BIND_IP` 預設為 `192.168.0.18`；請改成 NAS 實際的區域網路 IP。
-- `TRIP_UID`、`TRIP_GID` 預設為 `1000`；需讓該 UID/GID 對 NAS 上的 `data/` 資料夾有讀寫權限。
-- `AMAP_WEB_KEY` 選填；只有需要高德步行路線查詢時才設定。
+- Compose 預設綁定 `192.168.0.18:4187`，並以 UID/GID `1000:1000` 執行；一般情況不用另外設定這些環境變數。若 NAS IP 或 `data/` 權限不同，才在 `.env` 覆寫 `TRIP_BIND_IP`、`TRIP_UID` 或 `TRIP_GID`。
 
 把既有 `data/trips.sqlite` 放進 NAS 專案的 `data/` 資料夾後，從專案目錄執行 `docker compose pull`，再執行 `docker compose up -d`。之後每次 GitHub Actions 發布成功，NAS 再執行這兩個指令即可更新到 `latest`。容器會將 NAS 的 `192.168.0.18:4187` 導到 Node 伺服器；Cloudflare Tunnel 的服務位址可設為 `http://192.168.0.18:4187`，公開網址則使用 `https://travel.startfms.uk`。Tunnel 對外使用 HTTPS，應用程式啟用 Secure cookie；不要另開路由器的公網連接埠或使用未加密的公網 HTTP。
 
@@ -36,7 +34,7 @@ GHCR package 預設可能是 private；若 NAS 尚未登入 GitHub Container Reg
 
 ## 地圖路線
 
-目前右側地圖為**示意圖，不是真實地圖**；地點連結可在高德查看。若要驗證步行路線，先至[高德開放平台](https://lbs.amap.com/api/webservice/guide/api/newroute)申請 **Web 服務 API Key**，並在啟動 Vite 的同一個 PowerShell 終端機設定 `$env:AMAP_WEB_KEY = '你的金鑰'`。金鑰只由本機 Vite 伺服器使用，不要填入網頁或寫進程式碼。
+目前右側地圖為**示意圖，不是真實地圖**；地點連結可在高德查看。一般使用不需要高德 API Key。若之後要在本機啟用高德步行路線驗證，才需至[高德開放平台](https://lbs.amap.com/api/webservice/guide/api/newroute)申請 **Web 服務 API Key**，並在啟動 Vite 的同一個 PowerShell 終端機設定 `$env:AMAP_WEB_KEY = '你的金鑰'`。金鑰只由伺服器端使用，不要填入網頁或寫進程式碼。
 
 路線驗證前需提供正確的高德 GCJ-02 座標、每段與每日步行上限、替代交通方式及是否包含住宿起終點。資料不足時會保持未驗證，不會將直線距離當成步行路線。北京歷史行程目前沒有地點座標，因此不會顯示已驗證路線。
 
