@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Trip, TripWorkspace } from './models/trip'
 import type { WalkLeg } from './models/walking'
 import { getTripStatus, sortTripsNearToFar, type TripStatus } from './services/date.service'
 import { listDates } from './services/trip.service'
 import { loadTripWorkspace, saveWorkspace } from './services/trip-workspace.service'
+import { getAuthStatus, loginWithAccessCode, logout as logoutFromServer, type AccessRole } from './services/auth.service'
 import { evaluateWalk } from './services/walking.service'
 import './App.scss'
 
@@ -23,10 +24,52 @@ const tripStatusLabels: Record<TripStatus, string> = {
   ended: '結束',
 }
 
+type AccessGateProps = {
+  configured: boolean
+  error: string
+  busy: boolean
+  code: string
+  onCodeChange: (value: string) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+}
+
+function AccessGate({ configured, error, busy, code, onCodeChange, onSubmit }: AccessGateProps) {
+  return <main className="access-page">
+    <section className="access-card">
+      <div className="access-brand"><span className="brand-mark">✳</span><span>途間 <small>TRIP STUDIO</small></span></div>
+      <span className="overline">PRIVATE TRAVEL SPACE</span>
+      <h1>旅程只和同行的人分享。</h1>
+      <p className="access-description">輸入 NAS 管理員或訪客通行碼。訪客只能查看，管理員可以編輯旅程。</p>
+      {error && <p className="access-error" role="alert">{error}</p>}
+      {!configured ? <p className="access-setup">{error ? '目前無法連線到 NAS 登入服務，請確認伺服器狀態與反向代理設定。' : <>請在 NAS 設定至少 16 個字元、彼此不同的 <code>TRIP_VIEW_CODE</code> 與 <code>TRIP_ADMIN_CODE</code>，再重新啟動網站。</>}</p> : <form onSubmit={onSubmit}>
+        <label htmlFor="access-code">通行碼</label>
+        <input
+          id="access-code"
+          type="password"
+          autoComplete="current-password"
+          minLength={16}
+          required
+          value={code}
+          onChange={(event) => onCodeChange(event.target.value)}
+          placeholder="輸入通行碼"
+        />
+        <button type="submit" disabled={busy}>{busy ? '正在登入…' : '登入旅程'}</button>
+      </form>}
+      <p className="access-footnote">通行碼由 NAS 驗證，不會儲存在瀏覽器或旅程資料中。</p>
+    </section>
+  </main>
+}
+
 function App() {
   const [workspace, setWorkspace] = useState<TripWorkspace | null>(null)
   const [day, setDay] = useState('')
   const [loading, setLoading] = useState(true)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authConfigured, setAuthConfigured] = useState(false)
+  const [authRole, setAuthRole] = useState<AccessRole | null>(null)
+  const [authCode, setAuthCode] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
   const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad'>('overview')
@@ -50,25 +93,60 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
-    async function loadTripData() {
+    async function initializeAccess() {
       try {
-        const loadedWorkspace = await loadTripWorkspace(localStorage)
+        const auth = await getAuthStatus()
+        if (!cancelled) {
+          setAuthConfigured(auth.configured)
+          setAuthRole(auth.authenticated ? auth.role : null)
+        }
+        if (!auth.configured || !auth.authenticated || !auth.role) return
+        const loadedWorkspace = await loadTripWorkspace(localStorage, auth.role === 'admin')
         if (!cancelled) {
           setWorkspace(loadedWorkspace)
           setDay(loadedWorkspace.trips.find((trip) => trip.id === loadedWorkspace.activeTripId)?.startDate ?? '')
         }
       } catch (error) {
-        if (!cancelled) setLoadError(error instanceof Error ? error.message : '讀取旅程資料失敗。')
+        if (!cancelled) setAuthError(error instanceof Error ? error.message : '無法確認登入狀態。')
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setAuthLoading(false)
+        }
       }
     }
-    void loadTripData()
+    void initializeAccess()
     return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
-    if (loading || !workspace) return
+    if (!authRole) return
+    let cancelled = false
+    async function verifySession() {
+      try {
+        const auth = await getAuthStatus()
+        if (!cancelled && (!auth.configured || !auth.authenticated)) {
+          setWorkspace(null)
+          setAuthRole(null)
+          setEditing(null)
+          setAuthCode('')
+          setAuthError('登入已逾時，請重新輸入通行碼。')
+        }
+      } catch (error) {
+        if (!cancelled) setAuthError(error instanceof Error ? error.message : '確認登入狀態失敗。')
+      }
+    }
+    const timer = window.setInterval(() => void verifySession(), 60_000)
+    window.addEventListener('focus', verifySession)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', verifySession)
+    }
+  }, [authRole])
+
+  useEffect(() => {
+    if (loading || !workspace || authRole !== 'admin') return
     const version = ++saveVersion.current
     const snapshot = workspace
     saveSequence.current = saveSequence.current
@@ -82,7 +160,7 @@ function App() {
           setSaveError(error instanceof Error ? error.message : '保存旅程資料失敗。')
         }
       })
-  }, [workspace, loading])
+  }, [workspace, loading, authRole])
 
   const trip = workspace?.trips.find((item) => item.id === workspace.activeTripId)
   const dates = trip ? listDates(trip.startDate, trip.endDate) : []
@@ -113,7 +191,7 @@ function App() {
   }
 
   function updateTrip(update: (current: Trip) => Trip) {
-    if (!workspace || !trip) return
+    if (authRole !== 'admin' || !workspace || !trip) return
     setWorkspace({
       ...workspace,
       trips: workspace.trips.map((item) => item.id === trip.id ? update(item) : item),
@@ -216,11 +294,63 @@ function App() {
     }
   }
 
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setAuthBusy(true)
+    setAuthError('')
+    try {
+      const role = await loginWithAccessCode(authCode)
+      setAuthRole(role)
+      setAuthCode('')
+      setLoading(true)
+      try {
+        const loadedWorkspace = await loadTripWorkspace(localStorage, role === 'admin')
+        setWorkspace(loadedWorkspace)
+        setDay(loadedWorkspace.trips.find((item) => item.id === loadedWorkspace.activeTripId)?.startDate ?? '')
+        setLoadError('')
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : '讀取旅程資料失敗。')
+      }
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : '登入失敗。')
+    } finally {
+      setLoading(false)
+      setAuthBusy(false)
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logoutFromServer()
+      setWorkspace(null)
+      setAuthRole(null)
+      setAuthCode('')
+      setAuthError('')
+      setLoadError('')
+      setTab('overview')
+      setEditing(null)
+      invalidateRoute()
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : '登出失敗。')
+    }
+  }
+
   const status = evaluateWalk(legs, Number(limits.leg), Number(limits.daily),
     Math.max(0, stops.length + (includeHotel ? 1 : -1)))
 
-  if (loading) return <main className="load-error">正在讀取本機 SQLite 旅程資料…</main>
-  if (loadError || !workspace || !trip) return <main className="load-error" role="alert"><h1>無法開啟旅程</h1><p>{loadError || '目前沒有有效的旅程資料。'}</p><p>資料庫位於專案的 `data/trips.sqlite`；請先確認檔案存在或恢復備份。</p></main>
+  if (authLoading || (authRole && loading)) return <main className="load-error">正在確認登入權限與旅程資料…</main>
+  if (!authConfigured || !authRole) {
+    return <AccessGate
+      configured={authConfigured}
+      error={authError}
+      busy={authBusy}
+      code={authCode}
+      onCodeChange={setAuthCode}
+      onSubmit={(event) => void handleLogin(event)}
+    />
+  }
+  if (loading) return <main className="load-error">正在讀取 NAS 旅程資料…</main>
+  if (loadError || !workspace || !trip) return <main className="load-error" role="alert"><h1>無法開啟旅程</h1><p>{loadError || '目前沒有有效的旅程資料。'}</p><button className="access-logout" onClick={() => void handleLogout()}>登出</button></main>
   const activeTripId = trip.id
   const activeTripStatus = getTripStatus(trip.startDate, trip.endDate, trip.timeZone, statusTime)
   const currentTrips = workspace.trips.filter((item) =>
@@ -266,14 +396,15 @@ function App() {
         <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => setTab('flights')}>✈ <span>航班與住宿</span></button>
         <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => setTab('travelers')}>♙ <span>同行旅客</span></button>
         <div className="sidebar-bottom">
-          <span className="status-dot" /> 本機 SQLite 儲存
-          <p>不會同步其他裝置；請備份 data/trips.sqlite。</p>
+          <span className="status-dot" /> NAS SQLite · {authRole === 'admin' ? '管理員' : '訪客唯讀'}
+          <p>旅程資料由 NAS 儲存；請勿分享管理員通行碼。</p>
         </div>
       </aside>
       <main className="main">
-        <header className="topbar">{tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}<span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span><span className="top-right">{workspace.trips.length} 趟旅程 · 本機 SQLite</span></header>
+        <header className="topbar">{tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}<span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span><span className="top-right">{workspace.trips.length} 趟旅程 · {authRole === 'admin' ? '管理員' : '訪客唯讀'}</span><button className="logout-button" onClick={() => void handleLogout()}>登出</button></header>
         <div className="content">
           {saveError && <p className="notice danger" role="alert">SQLite 儲存失敗：{saveError}</p>}
+          {authError && <p className="notice danger" role="alert">{authError}</p>}
           {tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
             <div className="eyebrow">MY TRIPS <span className="eyebrow-rule" /></div>
             <nav className="tabs home-tabs" aria-label="旅程總覽檢視">
@@ -328,20 +459,20 @@ function App() {
             </div>
             <div className="workspace">
               <section className="schedule">
-                <div className="panel-title"><div><span className="overline">DAY {dates.indexOf(activeDay) + 1} / {String(dates.length).padStart(2, '0')}</span><h3>{prettyDate(activeDay)} 的行程</h3></div><button className="small-action" onClick={() => { const id = crypto.randomUUID(); updateStops([...stops, { id, name: '', address: '', time: '10:00', duration: 60, coordinates: '' }]); setEditing(id) }}>＋ 新增景點</button></div>
+                <div className="panel-title"><div><span className="overline">DAY {dates.indexOf(activeDay) + 1} / {String(dates.length).padStart(2, '0')}</span><h3>{prettyDate(activeDay)} 的行程</h3></div>{authRole === 'admin' && <button className="small-action" onClick={() => { const id = crypto.randomUUID(); updateStops([...stops, { id, name: '', address: '', time: '10:00', duration: 60, coordinates: '' }]); setEditing(id) }}>＋ 新增景點</button>}</div>
                 {isDeparture && trip.outboundFlight && <div className="event fixed"><div className="event-time">{trip.outboundFlight.departureTime}<small>{trip.outboundFlight.departureAirport}</small></div><span className="event-symbol">✈</span><div><span className="tag">固定行程 · 航班</span><h4>出發前往{trip.destination}</h4><p>{trip.outboundFlight.number} · {trip.outboundFlight.departureAirport} {trip.outboundFlight.departureTerminal} → {trip.outboundFlight.arrivalAirport} {trip.outboundFlight.arrivalTerminal} · {trip.outboundFlight.arrivalTime} 抵達</p></div></div>}
                 {flightConflict && <p className="route-error" role="alert">景點時間與航班時段衝突；請另計入機場出入境及交通時間。</p>}
                 {timeConflict && <p className="route-error" role="alert">景點時間有重疊或順序不符；請調整開始時間及停留時間，並預留移動時間。</p>}
                 {stops.map((stop, index) => <div className="stop-block" key={stop.id}>
                   <div className="event"><div className="event-time">{stop.time}<small>當地</small></div><span className="event-symbol spot">{index + 1}</span><div className="event-body">
-                    {editing === stop.id ? <form onSubmit={(event) => { event.preventDefault(); if (stop.name.trim()) setEditing(null) }}>
+                    {editing === stop.id && authRole === 'admin' ? <form onSubmit={(event) => { event.preventDefault(); if (stop.name.trim()) setEditing(null) }}>
                       <label>景點名稱<input required value={stop.name} onChange={(event) => updateStop(stop.id, { name: event.target.value })} placeholder="輸入景點名稱" /></label>
                       <label>地址<input value={stop.address} onChange={(event) => updateStop(stop.id, { address: event.target.value })} placeholder="確認後再填寫" /></label>
                       <div className="form-row"><label>時間<input type="time" value={stop.time} onChange={(event) => updateStop(stop.id, { time: event.target.value })} /></label><label>最短停留分鐘<input type="number" min="0" value={stop.duration} onChange={(event) => { const duration = Math.max(0, Number(event.target.value)); updateStop(stop.id, { duration, ...(stop.durationMax !== undefined && stop.durationMax < duration ? { durationMax: duration } : {}) }) }} /></label><label>最長停留分鐘（選填）<input type="number" min={stop.duration} value={stop.durationMax ?? ''} onChange={(event) => updateStop(stop.id, { durationMax: event.target.value === '' ? undefined : Math.max(stop.duration, Number(event.target.value)) })} /></label></div>
                       <label>高德 GCJ-02 座標（經度,緯度）<input value={stop.coordinates} onChange={(event) => updateStop(stop.id, { coordinates: event.target.value })} placeholder="尚未確認可留空" /></label>
                       <label>備註<textarea value={stop.notes ?? ''} onChange={(event) => updateStop(stop.id, { notes: event.target.value })} placeholder="可記錄預約、票價或交通資訊" /></label>
                       <div className="form-actions"><button type="submit">完成</button><button type="button" className="plain" onClick={() => { updateStops(stops.filter((item) => item.id !== stop.id)); setEditing(null) }}>刪除</button></div>
-                    </form> : <><span className="tag soft">{stop.duration === 0 ? '時間點' : `自由行程 · ${stop.duration}${stop.durationMax !== undefined && stop.durationMax > stop.duration ? `–${stop.durationMax}` : ''} 分鐘`}</span><h4>{stop.name || '未命名景點'}</h4><p>{stop.address || '地點地址未提供'} · {stop.coordinates ? '已輸入座標（請確認來源）' : '尚無座標'}</p>{stop.notes && <p className="stop-notes">{stop.notes}</p>}<div className="inline-actions"><button onClick={() => setEditing(stop.id)}>編輯</button><button disabled={index === 0} onClick={() => moveStop(index, -1)}>上移</button><button disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}>下移</button><a target="_blank" rel="noreferrer" href={amapSearch(`${stop.name} ${stop.address}`, trip.destination)}>地圖查看 ↗</a></div></>}
+                    </form> : <><span className="tag soft">{stop.duration === 0 ? '時間點' : `自由行程 · ${stop.duration}${stop.durationMax !== undefined && stop.durationMax > stop.duration ? `–${stop.durationMax}` : ''} 分鐘`}</span><h4>{stop.name || '未命名景點'}</h4><p>{stop.address || '地點地址未提供'} · {stop.coordinates ? '已輸入座標（請確認來源）' : '尚無座標'}</p>{stop.notes && <p className="stop-notes">{stop.notes}</p>}<div className="inline-actions">{authRole === 'admin' && <><button onClick={() => setEditing(stop.id)}>編輯</button><button disabled={index === 0} onClick={() => moveStop(index, -1)}>上移</button><button disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}>下移</button></>}<a target="_blank" rel="noreferrer" href={amapSearch(`${stop.name} ${stop.address}`, trip.destination)}>地圖查看 ↗</a></div></>}
                   </div></div>
                   {index < stops.length - 1 && <div className="transfer">↳ 景點間步行路線尚未驗證</div>}
                 </div>)}
@@ -351,7 +482,7 @@ function App() {
               <aside className="route-panel">
                 <div className="route-visual"><div className="map-grid" /><div className="map-route"><span className="pin-one">⌂</span><span className="dashes">············</span><span className="pin-two">✦</span></div><span className="map-note">路線示意 · 非真實地圖</span></div>
                 <div className="route-content"><span className="overline">WALKABLE ROUTE</span><h3>走得剛剛好</h3><p>以高德實際步行路線驗證每一段與全天距離；未取得可驗證的完整路線前，不會判定符合上限。</p>
-                  {trip.hotelName && <label>住宿座標（高德 GCJ-02 經度,緯度）<input value={trip.hotelCoordinates ?? ''} onChange={(event) => updateTrip((current) => ({ ...current, hotelCoordinates: event.target.value }))} placeholder="確認後填入" /></label>}
+                  {authRole === 'admin' && trip.hotelName && <label>住宿座標（高德 GCJ-02 經度,緯度）<input value={trip.hotelCoordinates ?? ''} onChange={(event) => updateTrip((current) => ({ ...current, hotelCoordinates: event.target.value }))} placeholder="確認後填入" /></label>}
                   <label>每段最多步行（分鐘）<input type="number" min="1" value={limits.leg} onChange={(event) => { setLimits({ ...limits, leg: event.target.value }); invalidateRoute() }} placeholder="由你決定" /></label>
                   <label>每天最多步行（分鐘）<input type="number" min="1" value={limits.daily} onChange={(event) => { setLimits({ ...limits, daily: event.target.value }); invalidateRoute() }} placeholder="由你決定" /></label>
                   <label>可接受的替代交通<select value={modes} onChange={(event) => { setModes(event.target.value); invalidateRoute() }}><option value="">請選擇</option><option value="transit">大眾運輸</option><option value="taxi">計程車</option><option value="both">大眾運輸及計程車</option><option value="none">只走路</option></select></label>
@@ -415,16 +546,18 @@ function App() {
           </div>}
           {tab === 'notepad' && <section className="notepad-panel">
             <div className="section-heading"><div><span className="overline">TRIP NOTES</span><h2>旅程記事本</h2></div></div>
-            <p className="notepad-description">貼上這趟旅程需要留存的資訊、備忘或確認事項。</p>
-            <label className="visually-hidden" htmlFor="trip-notepad">記事本內容</label>
-            <textarea
-              id="trip-notepad"
-              className="notepad-editor"
-              value={trip.notepad ?? ''}
-              onChange={(event) => updateTrip((current) => ({ ...current, notepad: event.target.value }))}
-              placeholder="在這裡貼上或輸入記事…"
-            />
-            <div className="notepad-footer"><span>自動保存至本機 SQLite</span><span>{(trip.notepad ?? '').length} 字元</span></div>
+            <p className="notepad-description">{authRole === 'admin' ? '貼上這趟旅程需要留存的資訊、備忘或確認事項。' : '管理員與訪客共用這份記事；訪客只能查看。'}</p>
+            {authRole === 'admin' ? <>
+              <label className="visually-hidden" htmlFor="trip-notepad">記事本內容</label>
+              <textarea
+                id="trip-notepad"
+                className="notepad-editor"
+                value={trip.notepad ?? ''}
+                onChange={(event) => updateTrip((current) => ({ ...current, notepad: event.target.value }))}
+                placeholder="在這裡貼上或輸入記事…"
+              />
+            </> : <div className="notepad-readonly">{trip.notepad || '目前沒有記事。'}</div>}
+            <div className="notepad-footer"><span>{authRole === 'admin' ? '自動保存至 NAS SQLite' : '唯讀 · NAS SQLite'}</span><span>{(trip.notepad ?? '').length} 字元</span></div>
           </section>}
           </>}
         </div>

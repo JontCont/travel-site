@@ -29,9 +29,13 @@ export async function saveWorkspace(workspace: TripWorkspaceDto): Promise<void> 
   throw new Error(message)
 }
 
-export async function loadTripWorkspace(storage: Pick<Storage, 'getItem'>): Promise<TripWorkspaceDto> {
-  const response = await fetch('/api/workspace')
+export async function loadTripWorkspace(
+  storage: Pick<Storage, 'getItem'>,
+  allowMigration = true,
+): Promise<TripWorkspaceDto> {
+  const response = await fetch('/api/workspace', { credentials: 'same-origin' })
   if (response.status === 404) {
+    if (!allowMigration) throw new Error('SQLite 尚無旅程資料，且唯讀帳號無法遷移瀏覽器資料。')
     const legacyWorkspace = loadWorkspace(storage)
     if (!legacyWorkspace) throw new Error('SQLite 尚無旅程資料，且找不到可遷移的舊版瀏覽器資料。')
     await saveWorkspace(legacyWorkspace)

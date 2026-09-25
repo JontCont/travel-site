@@ -1,0 +1,9 @@
+.git
+.playwright-mcp
+.vscode
+node_modules
+dist
+dist-ssr
+data
+.env*
+*.log

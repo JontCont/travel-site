@@ -1,6 +1,24 @@
 #root {
   min-height: 100vh;
 }
+.access-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f4f6f1; }
+.access-card { width: min(100%, 440px); padding: 38px; background: white; border: 1px solid #e5ebe3; border-radius: 16px; box-shadow: 0 18px 60px #1d3b2610; }
+.access-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 44px; color: #234737; font-size: 23px; font-weight: 800; letter-spacing: .04em; }
+.access-brand small { display: block; margin-top: 1px; color: #8da395; font-size: 9px; font-weight: 500; letter-spacing: .28em; }
+.access-card h1 { margin: 11px 0; color: #214331; font-size: 27px; letter-spacing: -.05em; }
+.access-description, .access-footnote, .access-setup { color: #819486; font-size: 12px; line-height: 1.8; }
+.access-card form { display: grid; gap: 11px; margin-top: 25px; }
+.access-card form label { color: #546f5b; font-size: 12px; font-weight: 700; }
+.access-card form input { width: 100%; padding: 12px; border: 1px solid #dce6dc; border-radius: 7px; color: #294938; font: inherit; outline-color: #69957c; }
+.access-card form button, .access-logout { padding: 12px; border: 0; border-radius: 7px; background: #2e6647; color: white; font-size: 13px; font-weight: 700; cursor: pointer; }
+.access-card form button:disabled { cursor: wait; opacity: .7; }
+.access-error { padding: 10px 12px; border-radius: 6px; background: #fff2ee; color: #a84639; font-size: 12px; line-height: 1.6; }
+.access-setup { margin-top: 24px; padding: 12px; border-radius: 6px; background: #f3f6f1; }
+.access-setup code { color: #315b42; }
+.access-footnote { margin: 22px 0 0; font-size: 10px; }
+.logout-button { border: 1px solid #dfe8de; border-radius: 6px; padding: 8px 11px; background: white; color: #52745c; font-size: 11px; cursor: pointer; }
+.logout-button:hover, .access-logout:hover { filter: brightness(.96); }
+.notepad-readonly { min-height: 170px; padding: 16px; border: 1px solid #e5ebe3; border-radius: 8px; color: #52665a; font-size: 13px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .load-error { max-width: 620px; margin: 15vh auto; padding: 36px; background: white; border-radius: 12px; color: #a84639; }
 .app-shell { display: flex; min-height: 100vh; }
 .sidebar { width: 230px; flex-shrink: 0; background: #17382e; color: #d8e2d5; padding: 30px 18px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }

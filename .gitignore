@@ -12,6 +12,9 @@ dist
 dist-ssr
 .playwright-mcp
 *.local
+.env
+.env.*
+!.env.example
 data/*.sqlite
 data/*.sqlite-*
 

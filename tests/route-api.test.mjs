@@ -15,21 +15,37 @@ async function request(body) {
   return { status, output }
 }
 
-async function requestWorkspace(api, method, body) {
+const accessCodes = {
+  viewCode: 'test-view-access-code-123456',
+  adminCode: 'test-admin-access-code-123456',
+}
+
+async function requestApi(api, path, method, body, headers = {}) {
   const req = {
-    url: '/api/workspace',
+    url: path,
     method,
+    headers,
+    socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       if (body !== undefined) yield JSON.stringify(body)
     },
   }
-  let status, output
+  let status, output, responseHeaders
   const res = {
-    writeHead(code) { status = code },
+    writeHead(code, values) { status = code; responseHeaders = values },
     end(value) { output = value ? JSON.parse(value) : null },
   }
   await api(req, res, () => assert.fail('Unexpected next'))
+  return { status, output, headers: responseHeaders }
+}
+
+async function requestWorkspace(api, method, body, headers) {
+  const { status, output } = await requestApi(api, '/api/workspace', method, body, headers)
   return { status, output }
+}
+
+async function login(api, code) {
+  return requestApi(api, '/api/auth/login', 'POST', { code })
 }
 
 function testWorkspace() {
@@ -95,18 +111,20 @@ test('reports missing duration as an error, not zero walking', async () => {
 test('persists validated trip workspaces in SQLite', async () => {
   const database = new DatabaseSync(':memory:')
   try {
-    const api = createTripApi(database)
+    const api = createTripApi(database, accessCodes)
     const workspace = testWorkspace()
+    const { headers } = await login(api, accessCodes.adminCode)
+    const cookie = headers['Set-Cookie'].split(';')[0]
 
     assert.deepEqual(await requestWorkspace(api, 'GET'), {
-      status: 404,
-      output: { error: 'SQLite 尚未建立旅程資料。' },
+      status: 401,
+      output: { error: '請先登入才能存取旅程資料。' },
     })
-    assert.deepEqual(await requestWorkspace(api, 'PUT', workspace), {
+    assert.deepEqual(await requestWorkspace(api, 'PUT', workspace, { cookie }), {
       status: 200,
       output: { saved: true },
     })
-    assert.deepEqual(await requestWorkspace(api, 'GET'), {
+    assert.deepEqual(await requestWorkspace(api, 'GET', undefined, { cookie }), {
       status: 200,
       output: workspace,
     })
@@ -118,15 +136,110 @@ test('persists validated trip workspaces in SQLite', async () => {
 test('rejects invalid workspaces without changing saved SQLite data', async () => {
   const database = new DatabaseSync(':memory:')
   try {
-    const api = createTripApi(database)
+    const api = createTripApi(database, accessCodes)
     const workspace = testWorkspace()
-    await requestWorkspace(api, 'PUT', workspace)
+    const { headers } = await login(api, accessCodes.adminCode)
+    const cookie = headers['Set-Cookie'].split(';')[0]
+    await requestWorkspace(api, 'PUT', workspace, { cookie })
 
-    assert.deepEqual(await requestWorkspace(api, 'PUT', { trips: [], activeTripId: 'missing' }), {
+    assert.deepEqual(await requestWorkspace(api, 'PUT', { trips: [], activeTripId: 'missing' }, { cookie }), {
       status: 400,
       output: { error: '旅程資料格式不正確，未寫入 SQLite。' },
     })
-    assert.deepEqual(await requestWorkspace(api, 'GET'), { status: 200, output: workspace })
+    assert.deepEqual(await requestWorkspace(api, 'GET', undefined, { cookie }), { status: 200, output: workspace })
+  } finally {
+    database.close()
+  }
+})
+
+test('fails closed when the NAS access codes are not configured', async () => {
+  const database = new DatabaseSync(':memory:')
+  try {
+    const api = createTripApi(database, { viewCode: '', adminCode: '' })
+    assert.deepEqual(await requestApi(api, '/api/auth/status', 'GET'), {
+      status: 200,
+      output: { configured: false, authenticated: false, role: null },
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    })
+    assert.equal((await login(api, accessCodes.viewCode)).status, 503)
+    assert.equal((await requestWorkspace(api, 'GET')).status, 401)
+  } finally {
+    database.close()
+  }
+})
+
+test('rate-limits repeated invalid access-code attempts', async () => {
+  const database = new DatabaseSync(':memory:')
+  try {
+    const api = createTripApi(database, accessCodes)
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      assert.equal((await login(api, 'invalid-access-code')).status, 401)
+    }
+    assert.deepEqual(await login(api, 'invalid-access-code'), {
+      status: 429,
+      output: { error: '嘗試次數過多，請稍後再試。' },
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    })
+  } finally {
+    database.close()
+  }
+})
+
+test('viewer access can read but cannot write trip data', async () => {
+  const database = new DatabaseSync(':memory:')
+  try {
+    const api = createTripApi(database, accessCodes)
+    const adminLogin = await login(api, accessCodes.adminCode)
+    const adminCookie = adminLogin.headers['Set-Cookie'].split(';')[0]
+    const workspace = testWorkspace()
+    await requestWorkspace(api, 'PUT', workspace, { cookie: adminCookie })
+
+    const viewerLogin = await login(api, accessCodes.viewCode)
+    assert.equal(viewerLogin.output.role, 'viewer')
+    const viewerCookie = viewerLogin.headers['Set-Cookie'].split(';')[0]
+    assert.deepEqual(await requestWorkspace(api, 'GET', undefined, { cookie: viewerCookie }), {
+      status: 200,
+      output: workspace,
+    })
+    assert.deepEqual(await requestWorkspace(api, 'PUT', testWorkspace(), { cookie: viewerCookie }), {
+      status: 403,
+      output: { error: '訪客通行碼只有查看權限。' },
+    })
+    assert.deepEqual(await requestWorkspace(api, 'GET', undefined, { cookie: adminCookie }), {
+      status: 200,
+      output: workspace,
+    })
+  } finally {
+    database.close()
+  }
+})
+
+test('requires a session for every API endpoint and expires it on logout', async () => {
+  const database = new DatabaseSync(':memory:')
+  try {
+    const api = createTripApi(database, accessCodes)
+    assert.deepEqual(await requestApi(api, '/api/walk', 'POST', { origin: '119.3,26.1', destination: '119.4,26.2' }), {
+      status: 401,
+      output: { error: '請先登入才能存取旅程資料。' },
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    })
+
+    const loginResult = await login(api, accessCodes.viewCode)
+    const cookie = loginResult.headers['Set-Cookie'].split(';')[0]
+    assert.equal((await requestApi(api, '/api/auth/logout', 'POST', undefined, { cookie })).status, 200)
+    assert.equal((await requestWorkspace(api, 'GET', undefined, { cookie })).status, 401)
   } finally {
     database.close()
   }
