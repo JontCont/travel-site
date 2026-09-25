@@ -8,7 +8,7 @@ import { isTripWorkspaceDto } from './src/dto/trip-workspace.dto.ts'
 const coordinatePattern = /^-?\d{1,3}(?:\.\d{1,6})?,-?\d{1,2}(?:\.\d{1,6})?$/
 const defaultDatabasePath = fileURLToPath(new URL('./data/trips.sqlite', import.meta.url))
 const sessionCookie = 'trip_session'
-const sessionDurationMs = 12 * 60 * 60 * 1000
+const sessionDurationMonths = 6
 const minimumAccessCodeLength = 16
 
 export function openTripDatabase(databasePath = process.env.TRIP_DATABASE_PATH ?? defaultDatabasePath) {
@@ -30,16 +30,49 @@ function hashAccessCode(code) {
   return createHash('sha256').update(code, 'utf8').digest()
 }
 
+function hashSessionToken(token) {
+  return createHash('sha256').update(token, 'utf8').digest('hex')
+}
+
+function addCalendarMonths(timestamp, months) {
+  const date = new Date(timestamp)
+  const originalDay = date.getUTCDate()
+  date.setUTCDate(1)
+  date.setUTCMonth(date.getUTCMonth() + months)
+  const lastDayOfMonth = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()
+  date.setUTCDate(Math.min(originalDay, lastDayOfMonth))
+  return date.getTime()
+}
+
 /**
  * @param {{ viewCode?: string, adminCode?: string, secureCookie?: boolean }} [options]
  */
 export function createTripApi(database, options = {}) {
   database.exec('CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK (id = 1), data_json TEXT NOT NULL)')
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token_hash TEXT PRIMARY KEY,
+      role TEXT NOT NULL CHECK (role IN ('admin', 'viewer')),
+      credential_hash TEXT NOT NULL,
+      expires_at INTEGER NOT NULL
+    )
+  `)
   const readWorkspace = database.prepare('SELECT data_json FROM workspace WHERE id = 1')
   const writeWorkspace = database.prepare(`
     INSERT INTO workspace (id, data_json) VALUES (1, ?)
     ON CONFLICT(id) DO UPDATE SET data_json = excluded.data_json
   `)
+  const readSession = database.prepare('SELECT role, credential_hash, expires_at FROM auth_sessions WHERE token_hash = ?')
+  const writeSession = database.prepare(`
+    INSERT INTO auth_sessions (token_hash, role, credential_hash, expires_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(token_hash) DO UPDATE SET
+      role = excluded.role,
+      credential_hash = excluded.credential_hash,
+      expires_at = excluded.expires_at
+  `)
+  const deleteSession = database.prepare('DELETE FROM auth_sessions WHERE token_hash = ?')
+  const deleteExpiredSessions = database.prepare('DELETE FROM auth_sessions WHERE expires_at <= ?')
   const viewCode = options.viewCode ?? process.env.TRIP_VIEW_CODE ?? ''
   const adminCode = options.adminCode ?? process.env.TRIP_ADMIN_CODE ?? ''
   const configured = viewCode.length >= minimumAccessCodeLength &&
@@ -50,15 +83,27 @@ export function createTripApi(database, options = {}) {
   const secureCookie = options.secureCookie ?? (
     process.env.TRIP_COOKIE_SECURE === '1' || process.env.NODE_ENV === 'production'
   )
-  const sessions = new Map()
   const loginAttempts = new Map()
 
   function roleFor(req) {
     const token = getCookie(req, sessionCookie)
-    const session = sessions.get(token)
+    if (!token) return null
+    const tokenHash = hashSessionToken(token)
+    const session = readSession.get(tokenHash)
     if (!session) return null
-    if (session.expiresAt <= Date.now()) {
-      sessions.delete(token)
+    if (session.expires_at <= Date.now()) {
+      deleteSession.run(tokenHash)
+      return null
+    }
+    const currentCredentialHash = session.role === 'admin' ? adminCodeHash : viewCodeHash
+    const sessionCredentialHash = Buffer.from(session.credential_hash, 'hex')
+    if (
+      !configured ||
+      !currentCredentialHash ||
+      sessionCredentialHash.length !== currentCredentialHash.length ||
+      !timingSafeEqual(sessionCredentialHash, currentCredentialHash)
+    ) {
+      deleteSession.run(tokenHash)
       return null
     }
     return session.role
@@ -147,19 +192,21 @@ export function createTripApi(database, options = {}) {
       }
 
       loginAttempts.delete(address)
-      for (const [sessionToken, session] of sessions) {
-        if (session.expiresAt <= now) sessions.delete(sessionToken)
-      }
+      deleteExpiredSessions.run(now)
       const token = randomBytes(32).toString('base64url')
-      sessions.set(token, { role, expiresAt: Date.now() + sessionDurationMs })
+      const issuedAt = Date.now()
+      const expiresAt = addCalendarMonths(issuedAt, sessionDurationMonths)
+      const credentialHash = (role === 'admin' ? adminCodeHash : viewCodeHash).toString('hex')
+      writeSession.run(hashSessionToken(token), role, credentialHash, expiresAt)
       return reply(200, { authenticated: true, role }, {
-        'Set-Cookie': cookieValue(token, sessionDurationMs / 1000),
+        'Set-Cookie': cookieValue(token, Math.floor((expiresAt - issuedAt) / 1000)),
       })
     }
 
     if (path === '/api/auth/logout') {
       if (req.method !== 'POST') return reply(405, { error: '只支援 POST。' })
-      sessions.delete(getCookie(req, sessionCookie))
+      const token = getCookie(req, sessionCookie)
+      if (token) deleteSession.run(hashSessionToken(token))
       return reply(200, { authenticated: false }, { 'Set-Cookie': cookieValue('', 0) })
     }
 

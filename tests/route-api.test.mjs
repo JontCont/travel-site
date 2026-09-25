@@ -244,3 +244,26 @@ test('requires a session for every API endpoint and expires it on logout', async
     database.close()
   }
 })
+
+test('persists six-month sessions and invalidates them when the role access code changes', async () => {
+  const database = new DatabaseSync(':memory:')
+  try {
+    const firstApi = createTripApi(database, accessCodes)
+    const loginResult = await login(firstApi, accessCodes.adminCode)
+    const cookie = loginResult.headers['Set-Cookie'].split(';')[0]
+    const maxAge = Number(loginResult.headers['Set-Cookie'].match(/Max-Age=(\d+)/)?.[1])
+
+    assert.ok(maxAge >= 181 * 24 * 60 * 60 && maxAge <= 184 * 24 * 60 * 60)
+
+    const restartedApi = createTripApi(database, accessCodes)
+    assert.equal((await requestWorkspace(restartedApi, 'GET', undefined, { cookie })).status, 404)
+
+    const changedCodeApi = createTripApi(database, {
+      viewCode: accessCodes.viewCode,
+      adminCode: 'test-admin-access-code-updated-789',
+    })
+    assert.equal((await requestWorkspace(changedCodeApi, 'GET', undefined, { cookie })).status, 401)
+  } finally {
+    database.close()
+  }
+})
