@@ -207,9 +207,9 @@ test('uses the destination rather than an entire transfer description in AMap pl
   const url = new URL(buildAmapPlaceSearchUrl(
     '福州長樂機場 → 桔E酒店(福州三坊七巷东街口地铁站店)',
     '福州',
-    '福州鼓樓區八一七北路41號',
+    '福州市鼓楼区八一七北路5号红霞新城37号',
   ))
-  assert.equal(url.searchParams.get('keyword'), '桔E酒店(福州三坊七巷东街口地铁站店) 福州鼓樓區八一七北路41號')
+  assert.equal(url.searchParams.get('keyword'), '桔E酒店(福州三坊七巷东街口地铁站店) 福州市鼓楼区八一七北路5号红霞新城37号')
   assert.equal(url.searchParams.get('city'), '福州')
 })
 
