@@ -7,6 +7,10 @@ export type Stop = {
   durationMax?: number
   notes?: string
   coordinates: string
+  openingHours?: string
+  openingHoursStatus?: 'unverified' | 'confirmed'
+  openingHoursSource?: string
+  openingHoursCheckedAt?: string
 }
 
 export type Traveler = { id: string; name: string; outbound: string; inbound: string }

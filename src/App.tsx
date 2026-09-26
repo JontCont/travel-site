@@ -1,15 +1,32 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Trip, TripWorkspace } from './models/trip'
-import type { WalkLeg } from './models/walking'
 import { getTripStatus, sortTripsNearToFar, type TripStatus } from './services/date.service'
 import { listDates } from './services/trip.service'
-import { loadTripWorkspace, saveWorkspace } from './services/trip-workspace.service'
+import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
 import { getAuthStatus, loginWithAccessCode, logout as logoutFromServer, type AccessRole } from './services/auth.service'
-import { evaluateWalk } from './services/walking.service'
+import { buildAmapPlaceSearchUrl, getMapApiKey } from './services/map.service'
 import './App.scss'
 
 function amapSearch(keyword: string, city: string) {
-  return `https://uri.amap.com/search?keyword=${encodeURIComponent(keyword)}&city=${encodeURIComponent(city)}`
+  return buildAmapPlaceSearchUrl(keyword, city)
+}
+
+function amapWalkingRoute(origin: string, destination: string, destinationName: string, key: string) {
+  const url = new URL('https://m.amap.com/navi/')
+  url.search = new URLSearchParams({
+    start: origin,
+    dest: destination,
+    destName: destinationName,
+    naviBy: 'walk',
+    key,
+  }).toString()
+  return url.toString()
+}
+
+function hasValidCoordinates(value: string) {
+  if (!/^-?\d{1,3}(?:\.\d{1,6})?,-?\d{1,2}(?:\.\d{1,6})?$/.test(value)) return false
+  const [longitude, latitude] = value.split(',').map(Number)
+  return longitude >= -180 && longitude <= 180 && latitude >= -90 && latitude <= 90
 }
 
 function prettyDate(date: string, options: Intl.DateTimeFormatOptions = {
@@ -60,6 +77,69 @@ function AccessGate({ configured, error, busy, code, onCodeChange, onSubmit }: A
   </main>
 }
 
+type NotepadPanelProps = {
+  trip: Trip
+  authRole: AccessRole
+  onAdminChange: (value: string) => void
+  onViewerSaved: (tripId: string, value: string) => void
+}
+
+function NotepadPanel({ trip, authRole, onAdminChange, onViewerSaved }: NotepadPanelProps) {
+  const [draft, setDraft] = useState(trip.notepad ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [saved, setSaved] = useState(false)
+  const content = authRole === 'admin' ? trip.notepad ?? '' : draft
+
+  async function saveViewerNotepad(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSaving(true)
+    setSaveError('')
+    setSaved(false)
+    try {
+      await saveTripNotepad(trip.id, draft)
+      onViewerSaved(trip.id, draft)
+      setSaved(true)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : '保存記事本失敗。')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <section className="notepad-panel">
+    <div className="section-heading"><div><span className="overline">TRIP NOTES</span><h2>旅程記事本</h2></div></div>
+    <p className="notepad-description">{authRole === 'admin' ? '貼上這趟旅程需要留存的資訊、備忘或確認事項。' : '訪客可以編輯這份記事；其他旅程資料仍為唯讀。'}</p>
+    {authRole === 'admin' ? <>
+      <label className="visually-hidden" htmlFor="trip-notepad">記事本內容</label>
+      <textarea
+        id="trip-notepad"
+        className="notepad-editor"
+        value={content}
+        onChange={(event) => onAdminChange(event.target.value)}
+        placeholder="在這裡貼上或輸入記事…"
+      />
+    </> : <form onSubmit={(event) => void saveViewerNotepad(event)}>
+      <label className="visually-hidden" htmlFor="trip-notepad">記事本內容</label>
+      <textarea
+        id="trip-notepad"
+        className="notepad-editor"
+        value={content}
+        onChange={(event) => {
+          setDraft(event.target.value)
+          setSaveError('')
+          setSaved(false)
+        }}
+        placeholder="在這裡貼上或輸入記事…"
+      />
+      {saveError && <p className="notice danger" role="alert">{saveError}</p>}
+      {saved && <p className="notepad-save-confirmation" role="status">記事本已保存至 NAS SQLite。</p>}
+      <button className="small-action notepad-save" type="submit" disabled={saving || draft === (trip.notepad ?? '')}>{saving ? '正在保存…' : '保存記事本'}</button>
+    </form>}
+    <div className="notepad-footer"><span>{authRole === 'admin' ? '自動保存至 NAS SQLite' : '訪客僅可修改記事本'}</span><span>{content.length} 字元</span></div>
+  </section>
+}
+
 function App() {
   const [workspace, setWorkspace] = useState<TripWorkspace | null>(null)
   const [day, setDay] = useState('')
@@ -75,14 +155,8 @@ function App() {
   const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad'>('overview')
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
-  const [limits, setLimits] = useState({ leg: '', daily: '' })
-  const [includeHotel, setIncludeHotel] = useState(false)
-  const [modes, setModes] = useState('')
-  const [legs, setLegs] = useState<WalkLeg[]>([])
-  const [routeError, setRouteError] = useState('')
-  const [routing, setRouting] = useState(false)
-  const [routeCheckedAt, setRouteCheckedAt] = useState('')
-  const activeRequest = useRef<AbortController | null>(null)
+  const [mapApiKey, setMapApiKey] = useState('')
+  const [mapConfigError, setMapConfigError] = useState('')
   const saveSequence = useRef<Promise<void>>(Promise.resolve())
   const saveVersion = useRef(0)
 
@@ -122,12 +196,35 @@ function App() {
   useEffect(() => {
     if (!authRole) return
     let cancelled = false
+    async function loadMapConfiguration() {
+      try {
+        const key = await getMapApiKey()
+        if (!cancelled) {
+          setMapApiKey(key)
+          setMapConfigError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setMapApiKey('')
+          setMapConfigError(error instanceof Error ? error.message : '讀取地圖設定失敗。')
+        }
+      }
+    }
+    void loadMapConfiguration()
+    return () => { cancelled = true }
+  }, [authRole])
+
+  useEffect(() => {
+    if (!authRole) return
+    let cancelled = false
     async function verifySession() {
       try {
         const auth = await getAuthStatus()
         if (!cancelled && (!auth.configured || !auth.authenticated)) {
           setWorkspace(null)
           setAuthRole(null)
+          setMapApiKey('')
+          setMapConfigError('')
           setEditing(null)
           setAuthCode('')
           setAuthError('登入已逾時，請重新輸入通行碼。')
@@ -179,16 +276,6 @@ function App() {
     const [nextHours, nextMinutes] = stop.time.split(':').map(Number)
     return nextHours * 60 + nextMinutes < hours * 60 + minutes + (previous.durationMax ?? previous.duration)
   })
-  useEffect(() => () => activeRequest.current?.abort(), [])
-
-  function invalidateRoute() {
-    activeRequest.current?.abort()
-    activeRequest.current = null
-    setRouting(false)
-    setLegs([])
-    setRouteError('')
-    setRouteCheckedAt('')
-  }
 
   function updateTrip(update: (current: Trip) => Trip) {
     if (authRole !== 'admin' || !workspace || !trip) return
@@ -196,7 +283,14 @@ function App() {
       ...workspace,
       trips: workspace.trips.map((item) => item.id === trip.id ? update(item) : item),
     })
-    invalidateRoute()
+  }
+
+  function updateViewerNotepad(tripId: string, value: string) {
+    if (!workspace) return
+    setWorkspace({
+      ...workspace,
+      trips: workspace.trips.map((item) => item.id === tripId ? { ...item, notepad: value } : item),
+    })
   }
 
   function updateStops(next: Trip['days'][string]) {
@@ -212,10 +306,6 @@ function App() {
     setDay(selected.startDate)
     setTab('itinerary')
     setEditing(null)
-    setLimits({ leg: '', daily: '' })
-    setModes('')
-    setIncludeHotel(false)
-    invalidateRoute()
   }
 
   function updateStop(id: string, patch: Partial<Trip['days'][string][number]>) {
@@ -228,70 +318,6 @@ function App() {
     const next = [...stops]
     ;[next[index], next[target]] = [next[target], next[index]]
     updateStops(next)
-  }
-
-  async function calculateRoute() {
-    invalidateRoute()
-    if (!trip) return
-    if (!limits.leg || !limits.daily || Number(limits.leg) <= 0 || Number(limits.daily) <= 0) {
-      setRouteError('請先填寫每段與每日可步行的分鐘上限。')
-      return
-    }
-    if (!modes) {
-      setRouteError('請選擇可接受的替代交通方式。')
-      return
-    }
-    if (includeHotel && !trip.hotelName) {
-      setRouteError('請先填寫住宿名稱，再將住宿納入每日起終點。')
-      return
-    }
-    if (!stops.length || (!includeHotel && stops.length < 2)) {
-      setRouteError(includeHotel ? '請先新增當日景點。' : '至少需要兩個景點，或選擇將住宿納入起終點。')
-      return
-    }
-    const stopPoints = stops.map((stop) => ({ id: stop.id, coordinates: stop.coordinates }))
-    const points = includeHotel
-      ? [{ id: 'hotel', coordinates: trip.hotelCoordinates ?? '' }, ...stopPoints, { id: 'hotel', coordinates: trip.hotelCoordinates ?? '' }]
-      : stopPoints
-    const coordinatePattern = /^-?\d{1,3}(?:\.\d{1,6})?,-?\d{1,2}(?:\.\d{1,6})?$/
-    if (points.some((point) => !coordinatePattern.test(point.coordinates))) {
-      setRouteError('請先從高德確認住宿及所有景點的 GCJ-02 座標，格式為經度,緯度（最多六位小數）。')
-      return
-    }
-    setRouting(true)
-    const controller = new AbortController()
-    activeRequest.current = controller
-    try {
-      const results: WalkLeg[] = []
-      for (let index = 0; index < points.length - 1; index++) {
-        const response = await fetch('/api/walk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ origin: points[index].coordinates, destination: points[index + 1].coordinates }),
-          signal: controller.signal,
-        })
-        const data: unknown = await response.json()
-        if (!response.ok || typeof data !== 'object' || data === null || !('minutes' in data) || !('meters' in data) ||
-          typeof data.minutes !== 'number' || typeof data.meters !== 'number') {
-          throw new Error(typeof data === 'object' && data !== null && 'error' in data && typeof data.error === 'string'
-            ? data.error : '高德路線服務回應無效，請稍後重試。')
-        }
-        results.push({ fromId: points[index].id, toId: points[index + 1].id, minutes: data.minutes, meters: data.meters })
-      }
-      if (controller.signal.aborted) return
-      setLegs(results)
-      setRouteCheckedAt(new Intl.DateTimeFormat('zh-TW', { timeZone: trip.timeZone, dateStyle: 'short', timeStyle: 'short' }).format(new Date()))
-    } catch (error) {
-      if (!controller.signal.aborted) {
-        setRouteError(error instanceof Error ? error.message : '路線查詢失敗。')
-        setLegs([])
-      }
-    } finally {
-      if (activeRequest.current === controller) {
-        activeRequest.current = null
-        setRouting(false)
-      }
-    }
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -327,16 +353,14 @@ function App() {
       setAuthCode('')
       setAuthError('')
       setLoadError('')
+      setMapApiKey('')
+      setMapConfigError('')
       setTab('overview')
       setEditing(null)
-      invalidateRoute()
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : '登出失敗。')
     }
   }
-
-  const status = evaluateWalk(legs, Number(limits.leg), Number(limits.daily),
-    Math.max(0, stops.length + (includeHotel ? 1 : -1)))
 
   if (authLoading || (authRole && loading)) return <main className="load-error">正在確認登入權限與旅程資料…</main>
   if (!authConfigured || !authRole) {
@@ -455,7 +479,7 @@ function App() {
           {tab === 'itinerary' && <>
             <div className="section-heading"><div><span className="overline">YOUR ITINERARY</span><h2>每天，都有新的風景。</h2></div><span className="muted">當地時間 · {trip.timeZone}</span></div>
             <div className="day-tabs" role="tablist" aria-label="選擇日期">
-              {dates.map((date, index) => <button role="tab" aria-selected={activeDay === date} className={activeDay === date ? 'chosen' : ''} key={date} onClick={() => { setDay(date); setEditing(null); invalidateRoute() }}><small>DAY {String(index + 1).padStart(2, '0')}</small><strong>{prettyDate(date)}</strong></button>)}
+              {dates.map((date, index) => <button role="tab" aria-selected={activeDay === date} className={activeDay === date ? 'chosen' : ''} key={date} onClick={() => { setDay(date); setEditing(null) }}><small>DAY {String(index + 1).padStart(2, '0')}</small><strong>{prettyDate(date)}</strong></button>)}
             </div>
             <div className="workspace">
               <section className="schedule">
@@ -463,6 +487,7 @@ function App() {
                 {isDeparture && trip.outboundFlight && <div className="event fixed"><div className="event-time">{trip.outboundFlight.departureTime}<small>{trip.outboundFlight.departureAirport}</small></div><span className="event-symbol">✈</span><div><span className="tag">固定行程 · 航班</span><h4>出發前往{trip.destination}</h4><p>{trip.outboundFlight.number} · {trip.outboundFlight.departureAirport} {trip.outboundFlight.departureTerminal} → {trip.outboundFlight.arrivalAirport} {trip.outboundFlight.arrivalTerminal} · {trip.outboundFlight.arrivalTime} 抵達</p></div></div>}
                 {flightConflict && <p className="route-error" role="alert">景點時間與航班時段衝突；請另計入機場出入境及交通時間。</p>}
                 {timeConflict && <p className="route-error" role="alert">景點時間有重疊或順序不符；請調整開始時間及停留時間，並預留移動時間。</p>}
+                {mapConfigError && <p className="route-error" role="alert">{mapConfigError}</p>}
                 {stops.map((stop, index) => <div className="stop-block" key={stop.id}>
                   <div className="event"><div className="event-time">{stop.time}<small>當地</small></div><span className="event-symbol spot">{index + 1}</span><div className="event-body">
                     {editing === stop.id && authRole === 'admin' ? <form onSubmit={(event) => { event.preventDefault(); if (stop.name.trim()) setEditing(null) }}>
@@ -470,31 +495,20 @@ function App() {
                       <label>地址<input value={stop.address} onChange={(event) => updateStop(stop.id, { address: event.target.value })} placeholder="確認後再填寫" /></label>
                       <div className="form-row"><label>時間<input type="time" value={stop.time} onChange={(event) => updateStop(stop.id, { time: event.target.value })} /></label><label>最短停留分鐘<input type="number" min="0" value={stop.duration} onChange={(event) => { const duration = Math.max(0, Number(event.target.value)); updateStop(stop.id, { duration, ...(stop.durationMax !== undefined && stop.durationMax < duration ? { durationMax: duration } : {}) }) }} /></label><label>最長停留分鐘（選填）<input type="number" min={stop.duration} value={stop.durationMax ?? ''} onChange={(event) => updateStop(stop.id, { durationMax: event.target.value === '' ? undefined : Math.max(stop.duration, Number(event.target.value)) })} /></label></div>
                       <label>高德 GCJ-02 座標（經度,緯度）<input value={stop.coordinates} onChange={(event) => updateStop(stop.id, { coordinates: event.target.value })} placeholder="尚未確認可留空" /></label>
+                      <label>營業時間<input value={stop.openingHours ?? ''} onChange={(event) => updateStop(stop.id, { openingHours: event.target.value })} placeholder="例如：10:00–22:00；週一公休" /></label>
+                      <label>營業時間狀態<select value={stop.openingHoursStatus ?? 'unverified'} onChange={(event) => { const status = event.target.value; if (status === 'unverified' || status === 'confirmed') updateStop(stop.id, { openingHoursStatus: status }) }}><option value="unverified">待確認</option><option value="confirmed">已確認</option></select></label>
+                      <label>確認來源<input value={stop.openingHoursSource ?? ''} onChange={(event) => updateStop(stop.id, { openingHoursSource: event.target.value })} placeholder="例如：店家官網、店家電話" /></label>
+                      <label>確認日期<input type="date" value={stop.openingHoursCheckedAt ?? ''} onChange={(event) => updateStop(stop.id, { openingHoursCheckedAt: event.target.value })} /></label>
+                      <p>營業時間、來源和確認日期都填妥後，才會顯示為已確認。</p>
                       <label>備註<textarea value={stop.notes ?? ''} onChange={(event) => updateStop(stop.id, { notes: event.target.value })} placeholder="可記錄預約、票價或交通資訊" /></label>
                       <div className="form-actions"><button type="submit">完成</button><button type="button" className="plain" onClick={() => { updateStops(stops.filter((item) => item.id !== stop.id)); setEditing(null) }}>刪除</button></div>
-                    </form> : <><span className="tag soft">{stop.duration === 0 ? '時間點' : `自由行程 · ${stop.duration}${stop.durationMax !== undefined && stop.durationMax > stop.duration ? `–${stop.durationMax}` : ''} 分鐘`}</span><h4>{stop.name || '未命名景點'}</h4><p>{stop.address || '地點地址未提供'} · {stop.coordinates ? '已輸入座標（請確認來源）' : '尚無座標'}</p>{stop.notes && <p className="stop-notes">{stop.notes}</p>}<div className="inline-actions">{authRole === 'admin' && <><button onClick={() => setEditing(stop.id)}>編輯</button><button disabled={index === 0} onClick={() => moveStop(index, -1)}>上移</button><button disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}>下移</button></>}<a target="_blank" rel="noreferrer" href={amapSearch(`${stop.name} ${stop.address}`, trip.destination)}>地圖查看 ↗</a></div></>}
+                    </form> : <><span className="tag soft">{stop.duration === 0 ? '時間點' : `自由行程 · ${stop.duration}${stop.durationMax !== undefined && stop.durationMax > stop.duration ? `–${stop.durationMax}` : ''} 分鐘`}</span><h4>{stop.name || '未命名景點'}</h4><p>{stop.address || '地點地址未提供'} · {stop.coordinates ? '已輸入座標（請確認來源）' : '尚無座標'}</p><details className="stop-details"><summary>更多資訊 · 營業時間{stop.openingHoursStatus === 'confirmed' && stop.openingHours?.trim() && stop.openingHoursSource?.trim() && stop.openingHoursCheckedAt ? '已確認' : stop.openingHoursStatus === 'confirmed' ? '資料未齊' : '待確認'}</summary><div className="stop-details-body"><p><strong>營業時間</strong>{stop.openingHours?.trim() || '尚未提供'}</p><p><strong>狀態</strong>{stop.openingHoursStatus === 'confirmed' && stop.openingHours?.trim() && stop.openingHoursSource?.trim() && stop.openingHoursCheckedAt ? `已確認 · ${stop.openingHoursCheckedAt} · ${stop.openingHoursSource}` : '待確認；尚未核實資料'}</p>{stop.notes && <p className="stop-notes">{stop.notes}</p>}</div></details><div className="inline-actions">{authRole === 'admin' && <><button onClick={() => setEditing(stop.id)}>編輯</button><button disabled={index === 0} onClick={() => moveStop(index, -1)}>上移</button><button disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}>下移</button></>}<a target="_blank" rel="noreferrer" href={buildAmapPlaceSearchUrl(stop.name, trip.destination, stop.address)}>地圖查看 ↗</a></div></>}
                   </div></div>
-                  {index < stops.length - 1 && <div className="transfer">↳ 景點間步行路線尚未驗證</div>}
+                  {index < stops.length - 1 && <div className="transfer">↳ 移動時間尚未驗證{mapApiKey && hasValidCoordinates(stop.coordinates) && hasValidCoordinates(stops[index + 1].coordinates) && <> · <a href={amapWalkingRoute(stop.coordinates, stops[index + 1].coordinates, stops[index + 1].name, mapApiKey)} target="_blank" rel="noreferrer">用高德 LightMap 查看此段 ↗</a></>}</div>}
                 </div>)}
                 {isReturn && trip.returnFlight && <div className="event fixed"><div className="event-time">{trip.returnFlight.departureTime}<small>{trip.returnFlight.departureAirport}</small></div><span className="event-symbol">✈</span><div><span className="tag">固定行程 · 航班</span><h4>返程</h4><p>{trip.returnFlight.number} · {trip.returnFlight.departureAirport} {trip.returnFlight.departureTerminal} → {trip.returnFlight.arrivalAirport} {trip.returnFlight.arrivalTerminal} · {trip.returnFlight.arrivalTime} 抵達</p></div></div>}
                 {!stops.length && <div className="empty"><span>✧</span><strong>這一天，留給你自由安排。</strong><p>新增想去的地方，開始規劃屬於你的{trip.destination}路線。</p></div>}
               </section>
-              <aside className="route-panel">
-                <div className="route-visual"><div className="map-grid" /><div className="map-route"><span className="pin-one">⌂</span><span className="dashes">············</span><span className="pin-two">✦</span></div><span className="map-note">路線示意 · 非真實地圖</span></div>
-                <div className="route-content"><span className="overline">WALKABLE ROUTE</span><h3>走得剛剛好</h3><p>以高德實際步行路線驗證每一段與全天距離；未取得可驗證的完整路線前，不會判定符合上限。</p>
-                  {authRole === 'admin' && trip.hotelName && <label>住宿座標（高德 GCJ-02 經度,緯度）<input value={trip.hotelCoordinates ?? ''} onChange={(event) => updateTrip((current) => ({ ...current, hotelCoordinates: event.target.value }))} placeholder="確認後填入" /></label>}
-                  <label>每段最多步行（分鐘）<input type="number" min="1" value={limits.leg} onChange={(event) => { setLimits({ ...limits, leg: event.target.value }); invalidateRoute() }} placeholder="由你決定" /></label>
-                  <label>每天最多步行（分鐘）<input type="number" min="1" value={limits.daily} onChange={(event) => { setLimits({ ...limits, daily: event.target.value }); invalidateRoute() }} placeholder="由你決定" /></label>
-                  <label>可接受的替代交通<select value={modes} onChange={(event) => { setModes(event.target.value); invalidateRoute() }}><option value="">請選擇</option><option value="transit">大眾運輸</option><option value="taxi">計程車</option><option value="both">大眾運輸及計程車</option><option value="none">只走路</option></select></label>
-                  {trip.hotelName && <label className="checkbox"><input type="checkbox" checked={includeHotel} onChange={(event) => { setIncludeHotel(event.target.checked); invalidateRoute() }} /> 將住宿納入每日起點與終點</label>}
-                  <button className="route-button" onClick={calculateRoute} disabled={routing}>{routing ? '正在查詢…' : '檢查步行路線 →'}</button>
-                  {routeError && <p className="route-error" role="alert">{routeError}</p>}
-                  <div className="route-status"><span className="status-dot amber" /> {status === 'unverified' ? '尚未驗證 · 不視為符合上限' : status === 'over' ? '超過步行上限' : '符合步行上限'}</div>
-                  {legs.length > 0 && <div className="route-results"><p>高德步行 API · {routeCheckedAt} 查詢</p>{legs.map((leg, index) => <p key={`${leg.fromId}-${leg.toId}-${index}`}>{leg.fromId === 'hotel' ? trip.hotelName : stops.find((stop) => stop.id === leg.fromId)?.name} → {leg.toId === 'hotel' ? trip.hotelName : stops.find((stop) => stop.id === leg.toId)?.name}：{leg.minutes} 分鐘 / {leg.meters} 公尺{leg.minutes > Number(limits.leg) ? ' · 單段超標' : ''}</p>)}<strong>全天步行 {legs.reduce((sum, leg) => sum + leg.minutes, 0)} 分鐘{legs.reduce((sum, leg) => sum + leg.minutes, 0) > Number(limits.daily) ? ' · 全天超標' : ''}</strong></div>}
-                  {status === 'over' && <p className="route-error">行程超標。可調整景點順序、刪減景點，或考慮{modes === 'taxi' ? '計程車' : modes === 'transit' ? '大眾運輸' : modes === 'both' ? '大眾運輸／計程車' : '分拆當日行程'}；替代方案仍需另外規劃及驗證。</p>}
-                  {trip.hotelName && <a className="external-map" href={amapSearch(`${trip.hotelName} ${trip.hotelAddress}`, trip.destination)} target="_blank" rel="noreferrer">在高德地圖查看住宿 ↗</a>}
-                </div>
-              </aside>
             </div>
           </>}
           {tab === 'flights' && <div className="details-grid">
@@ -544,21 +558,13 @@ function App() {
             </div>)}
             {!trip.travelers.length && <div className="empty"><span>♙</span><strong>尚未提供旅客資料</strong></div>}
           </div>}
-          {tab === 'notepad' && <section className="notepad-panel">
-            <div className="section-heading"><div><span className="overline">TRIP NOTES</span><h2>旅程記事本</h2></div></div>
-            <p className="notepad-description">{authRole === 'admin' ? '貼上這趟旅程需要留存的資訊、備忘或確認事項。' : '管理員與訪客共用這份記事；訪客只能查看。'}</p>
-            {authRole === 'admin' ? <>
-              <label className="visually-hidden" htmlFor="trip-notepad">記事本內容</label>
-              <textarea
-                id="trip-notepad"
-                className="notepad-editor"
-                value={trip.notepad ?? ''}
-                onChange={(event) => updateTrip((current) => ({ ...current, notepad: event.target.value }))}
-                placeholder="在這裡貼上或輸入記事…"
-              />
-            </> : <div className="notepad-readonly">{trip.notepad || '目前沒有記事。'}</div>}
-            <div className="notepad-footer"><span>{authRole === 'admin' ? '自動保存至 NAS SQLite' : '唯讀 · NAS SQLite'}</span><span>{(trip.notepad ?? '').length} 字元</span></div>
-          </section>}
+          {tab === 'notepad' && <NotepadPanel
+            key={trip.id}
+            trip={trip}
+            authRole={authRole}
+            onAdminChange={(value) => updateTrip((current) => ({ ...current, notepad: value }))}
+            onViewerSaved={updateViewerNotepad}
+          />}
           </>}
         </div>
       </main>

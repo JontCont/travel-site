@@ -44,6 +44,11 @@ async function requestWorkspace(api, method, body, headers) {
   return { status, output }
 }
 
+async function requestNotepad(api, method, body, headers) {
+  const { status, output } = await requestApi(api, '/api/notepad', method, body, headers)
+  return { status, output }
+}
+
 async function login(api, code) {
   return requestApi(api, '/api/auth/login', 'POST', { code })
 }
@@ -172,6 +177,42 @@ test('fails closed when the NAS access codes are not configured', async () => {
   }
 })
 
+test('serves the AMap JavaScript API key only to authenticated sessions', async () => {
+  const database = new DatabaseSync(':memory:')
+  const previous = process.env.AMAP_API_KEY
+  process.env.AMAP_API_KEY = 'test-amap-js-key'
+  try {
+    const api = createTripApi(database, accessCodes)
+    assert.deepEqual(await requestApi(api, '/api/map-config', 'GET'), {
+      status: 401,
+      output: { error: '請先登入才能存取地圖設定。' },
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    })
+    const { headers } = await login(api, accessCodes.adminCode)
+    const cookie = headers['Set-Cookie'].split(';')[0]
+    assert.equal((await requestApi(api, '/api/map-config', 'GET', undefined, { cookie })).output.apiKey, 'test-amap-js-key')
+  } finally {
+    database.close()
+    if (previous === undefined) delete process.env.AMAP_API_KEY
+    else process.env.AMAP_API_KEY = previous
+  }
+})
+
+test('uses the destination rather than an entire transfer description in AMap place searches', async () => {
+  const { buildAmapPlaceSearchUrl } = await import('../src/services/map.service.ts')
+  const url = new URL(buildAmapPlaceSearchUrl(
+    '福州長樂機場 → 桔E酒店(福州三坊七巷东街口地铁站店)',
+    '福州',
+    '福州鼓樓區八一七北路41號',
+  ))
+  assert.equal(url.searchParams.get('keyword'), '桔E酒店(福州三坊七巷东街口地铁站店) 福州鼓樓區八一七北路41號')
+  assert.equal(url.searchParams.get('city'), '福州')
+})
+
 test('rate-limits repeated invalid access-code attempts', async () => {
   const database = new DatabaseSync(':memory:')
   try {
@@ -217,6 +258,48 @@ test('viewer access can read but cannot write trip data', async () => {
       status: 200,
       output: workspace,
     })
+  } finally {
+    database.close()
+  }
+})
+
+test('viewers can update only the notepad through the dedicated endpoint', async () => {
+  const database = new DatabaseSync(':memory:')
+  try {
+    const api = createTripApi(database, accessCodes)
+    const workspace = testWorkspace()
+    const adminLogin = await login(api, accessCodes.adminCode)
+    const adminCookie = adminLogin.headers['Set-Cookie'].split(';')[0]
+    await requestWorkspace(api, 'PUT', workspace, { cookie: adminCookie })
+
+    const viewerLogin = await login(api, accessCodes.viewCode)
+    const viewerCookie = viewerLogin.headers['Set-Cookie'].split(';')[0]
+    assert.deepEqual(await requestNotepad(api, 'PUT', {
+      tripId: 'sqlite-trip',
+      notepad: '訪客補充：集合時間待確認',
+    }, { cookie: viewerCookie }), { status: 200, output: { saved: true } })
+
+    const stored = await requestWorkspace(api, 'GET', undefined, { cookie: viewerCookie })
+    assert.equal(stored.output.trips[0].notepad, '訪客補充：集合時間待確認')
+    assert.equal(stored.output.trips[0].title, workspace.trips[0].title)
+
+    assert.deepEqual(await requestNotepad(api, 'PUT', {
+      tripId: 'sqlite-trip',
+      notepad: '不應保存',
+      title: '未授權改名',
+    }, { cookie: viewerCookie }), {
+      status: 400,
+      output: { error: '記事本請求格式不正確；只接受旅程 ID 與記事內容。' },
+    })
+    assert.deepEqual(await requestNotepad(api, 'PUT', {
+      tripId: 'missing-trip',
+      notepad: '不應保存',
+    }, { cookie: viewerCookie }), {
+      status: 404,
+      output: { error: '找不到指定旅程；記事本未修改。' },
+    })
+    assert.equal((await requestWorkspace(api, 'GET', undefined, { cookie: viewerCookie })).output.trips[0].notepad,
+      '訪客補充：集合時間待確認')
   } finally {
     database.close()
   }

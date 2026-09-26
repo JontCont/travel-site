@@ -29,6 +29,21 @@ export async function saveWorkspace(workspace: TripWorkspaceDto): Promise<void> 
   throw new Error(message)
 }
 
+export async function saveTripNotepad(tripId: string, notepad: string): Promise<void> {
+  const response = await fetch('/api/notepad', {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tripId, notepad }),
+  })
+  if (response.ok) return
+  const payload: unknown = await response.json().catch(() => null)
+  const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+    ? payload.error
+    : `記事本儲存失敗（HTTP ${response.status}）。`
+  throw new Error(message)
+}
+
 export async function loadTripWorkspace(
   storage: Pick<Storage, 'getItem'>,
   allowMigration = true,

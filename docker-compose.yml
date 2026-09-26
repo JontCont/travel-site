@@ -5,10 +5,12 @@ services:
     pull_policy: always
     restart: unless-stopped
     init: true
-    user: "${TRIP_UID:-1000}:${TRIP_GID:-1000}"
+    user: "1026:100"
     environment:
       TRIP_VIEW_CODE: ${TRIP_VIEW_CODE:?Set TRIP_VIEW_CODE in .env}
       TRIP_ADMIN_CODE: ${TRIP_ADMIN_CODE:?Set TRIP_ADMIN_CODE in .env}
+      AMAP_API_KEY: ${AMAP_API_KEY:-}
+      AMAP_WEB_KEY: ${AMAP_WEB_KEY:-}
     volumes:
       - ./data:/data
     ports:

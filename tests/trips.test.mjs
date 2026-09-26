@@ -118,6 +118,34 @@ test('persists per-trip notepad text and validates its DTO type', () => {
   }), false)
 })
 
+test('validates manually maintained opening hours and their confirmation metadata', () => {
+  const trip = makeTrip({
+    days: {
+      '2026-05-15': [{
+        id: 'restaurant',
+        name: '餐廳',
+        address: '福州',
+        time: '12:00',
+        duration: 60,
+        coordinates: '',
+        openingHours: '10:00–22:00；週一公休',
+        openingHoursStatus: 'confirmed',
+        openingHoursSource: '店家官方網站',
+        openingHoursCheckedAt: '2026-09-26',
+      }],
+    },
+  })
+  assert.equal(isTripWorkspaceDto({ trips: [trip], activeTripId: trip.id }), true)
+  assert.equal(isTripWorkspaceDto({
+    trips: [{ ...trip, days: { ...trip.days, '2026-05-15': [{ ...trip.days['2026-05-15'][0], openingHoursStatus: 'unknown' }] } }],
+    activeTripId: trip.id,
+  }), false)
+  assert.equal(isTripWorkspaceDto({
+    trips: [{ ...trip, days: { ...trip.days, '2026-05-15': [{ ...trip.days['2026-05-15'][0], openingHoursCheckedAt: '26-09-2026' }] } }],
+    activeTripId: trip.id,
+  }), false)
+})
+
 test('loads an existing browser workspace as a one-time SQLite migration source', () => {
   const trip = makeTrip()
   const workspace = { trips: [trip], activeTripId: trip.id }

@@ -153,6 +153,12 @@ export function createTripApi(database, options = {}) {
       return reply(200, { configured, authenticated: Boolean(role), role })
     }
 
+    if (path === '/api/map-config') {
+      if (req.method !== 'GET') return reply(405, { error: '只支援 GET。' })
+      if (!roleFor(req)) return reply(401, { error: '請先登入才能存取地圖設定。' })
+      return reply(200, { apiKey: process.env.AMAP_API_KEY ?? '' })
+    }
+
     if (path === '/api/auth/login') {
       if (req.method !== 'POST') return reply(405, { error: '只支援 POST。' })
       if (!configured || !viewCodeHash || !adminCodeHash) {
@@ -213,6 +219,60 @@ export function createTripApi(database, options = {}) {
     const role = roleFor(req)
     if (!role) return reply(401, { error: '請先登入才能存取旅程資料。' })
     if (!configured) return reply(503, { error: 'NAS 尚未設定有效的訪客與管理員通行碼。' })
+    if (path === '/api/notepad') {
+      if (req.method !== 'PUT') return reply(405, { error: '只支援 PUT。' })
+
+      let body
+      try {
+        body = await readJsonBody(req, 100 * 1024)
+      } catch (error) {
+        return reply(400, { error: error instanceof Error ? error.message : '讀取記事本請求失敗。' })
+      }
+      if (typeof body !== 'object' || body === null || Array.isArray(body) ||
+        Object.keys(body).length !== 2 || typeof body.tripId !== 'string' || !body.tripId ||
+        typeof body.notepad !== 'string') {
+        return reply(400, { error: '記事本請求格式不正確；只接受旅程 ID 與記事內容。' })
+      }
+
+      let inTransaction = false
+      try {
+        database.exec('BEGIN IMMEDIATE')
+        inTransaction = true
+        const row = readWorkspace.get()
+        if (!row) {
+          database.exec('ROLLBACK')
+          inTransaction = false
+          return reply(404, { error: 'SQLite 尚未建立旅程資料。' })
+        }
+        let workspace
+        try {
+          workspace = JSON.parse(row.data_json)
+        } catch {
+          database.exec('ROLLBACK')
+          inTransaction = false
+          return reply(500, { error: 'SQLite 旅程資料不是有效 JSON；記事本未修改。' })
+        }
+        if (!isTripWorkspaceDto(workspace)) {
+          database.exec('ROLLBACK')
+          inTransaction = false
+          return reply(500, { error: 'SQLite 旅程資料格式不正確；記事本未修改。' })
+        }
+        const trip = workspace.trips.find((item) => item.id === body.tripId)
+        if (!trip) {
+          database.exec('ROLLBACK')
+          inTransaction = false
+          return reply(404, { error: '找不到指定旅程；記事本未修改。' })
+        }
+        trip.notepad = body.notepad
+        writeWorkspace.run(JSON.stringify(workspace))
+        database.exec('COMMIT')
+        inTransaction = false
+        return reply(200, { saved: true })
+      } catch (error) {
+        if (inTransaction) database.exec('ROLLBACK')
+        return reply(500, { error: error instanceof Error ? `寫入記事本失敗：${error.message}` : '寫入記事本失敗。' })
+      }
+    }
     if (path !== '/api/workspace') return next()
 
     if (req.method === 'GET') {

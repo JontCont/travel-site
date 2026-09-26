@@ -19,7 +19,12 @@ function isStop(value: unknown): value is StopDto {
     typeof value.duration === 'number' && Number.isFinite(value.duration) && value.duration >= 0 &&
     (value.durationMax === undefined ||
       (typeof value.durationMax === 'number' && Number.isFinite(value.durationMax) && value.durationMax >= value.duration)) &&
-    (value.notes === undefined || typeof value.notes === 'string')
+    (value.notes === undefined || typeof value.notes === 'string') &&
+    (value.openingHours === undefined || typeof value.openingHours === 'string') &&
+    (value.openingHoursStatus === undefined || value.openingHoursStatus === 'unverified' || value.openingHoursStatus === 'confirmed') &&
+    (value.openingHoursSource === undefined || typeof value.openingHoursSource === 'string') &&
+    (value.openingHoursCheckedAt === undefined ||
+      (typeof value.openingHoursCheckedAt === 'string' && isLocalDate(value.openingHoursCheckedAt)))
 }
 
 function isTraveler(value: unknown): value is TravelerDto {
