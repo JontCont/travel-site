@@ -572,7 +572,28 @@ function App() {
               <span className="overline">YOUR STAY · {trip.startDate} — {trip.endDate}</span>
               <h2>住宿</h2>
               <div className="read-only-value"><span>住宿名稱</span><strong>{trip.hotelName || '尚未提供'}</strong></div>
-              <div className="read-only-value"><span>地址</span><strong>{trip.hotelAddress || '尚未提供'}</strong></div>
+              <div className="read-only-value">
+                <span>地址</span>
+                <div className="copyable-value">
+                  <strong>{trip.hotelAddress || '尚未提供'}</strong>
+                  {trip.hotelAddress.trim() && <button
+                    type="button"
+                    className="copy-address-button"
+                    aria-label={addressCopyFeedback?.stopId === 'hotel-address' && addressCopyFeedback.status === 'copied' ? '住宿地址已複製' : '複製住宿地址'}
+                    title={addressCopyFeedback?.stopId === 'hotel-address' && addressCopyFeedback.status === 'copied' ? '住宿地址已複製' : '複製住宿地址'}
+                    onClick={() => { void copyStopAddress('hotel-address', trip.hotelAddress) }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      {addressCopyFeedback?.stopId === 'hotel-address' && addressCopyFeedback.status === 'copied'
+                        ? <path d="m5 12 4 4L19 6" />
+                        : <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></>}
+                    </svg>
+                  </button>}
+                </div>
+                {addressCopyFeedback?.stopId === 'hotel-address' && <p className={`address-copy-feedback ${addressCopyFeedback.status}`} role={addressCopyFeedback.status === 'failed' ? 'alert' : 'status'}>
+                  {addressCopyFeedback.status === 'copied' ? '住宿地址已複製' : '複製失敗，請確認瀏覽器剪貼簿權限後重試。'}
+                </p>}
+              </div>
               {trip.hotelDetails?.phone && <div className="read-only-value"><span>電話</span><strong>{trip.hotelDetails.phone}</strong></div>}
               {trip.hotelDetails?.rating && <div className="read-only-value"><span>地圖評分</span><strong>{trip.hotelDetails.rating.score.toFixed(1)} / {trip.hotelDetails.rating.scale.toFixed(1)}</strong></div>}
               {trip.hotelDetails?.referencePrice && <div className="read-only-value"><span>參考價</span><strong>{trip.hotelDetails.referencePrice}</strong></div>}
