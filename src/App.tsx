@@ -157,8 +157,22 @@ function App() {
   const [editing, setEditing] = useState<string | null>(null)
   const [mapApiKey, setMapApiKey] = useState('')
   const [mapConfigError, setMapConfigError] = useState('')
+  const [addressCopyFeedback, setAddressCopyFeedback] = useState<{ stopId: string; status: 'copied' | 'failed' } | null>(null)
   const saveSequence = useRef<Promise<void>>(Promise.resolve())
   const saveVersion = useRef(0)
+
+  async function copyStopAddress(stopId: string, address: string) {
+    if (!navigator.clipboard?.writeText) {
+      setAddressCopyFeedback({ stopId, status: 'failed' })
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(address)
+      setAddressCopyFeedback({ stopId, status: 'copied' })
+    } catch {
+      setAddressCopyFeedback({ stopId, status: 'failed' })
+    }
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => setStatusTime(new Date()), 60_000)
@@ -503,7 +517,31 @@ function App() {
                       <p>營業時間、來源和確認日期都填妥後，才會顯示為已確認。</p>
                       <label>備註<textarea value={stop.notes ?? ''} onChange={(event) => updateStop(stop.id, { notes: event.target.value })} placeholder="可記錄預約、票價或交通資訊" /></label>
                       <div className="form-actions"><button type="submit">完成</button><button type="button" className="plain" onClick={() => { updateStops(stops.filter((item) => item.id !== stop.id)); setEditing(null) }}>刪除</button></div>
-                    </form> : <><span className="tag soft">{stop.duration === 0 ? '時間點' : `自由行程 · ${stop.duration}${stop.durationMax !== undefined && stop.durationMax > stop.duration ? `–${stop.durationMax}` : ''} 分鐘`}</span><h4>{stop.name || '未命名景點'}</h4><p>{stop.hideFromMap ? `非地點行程 · 不顯示於地圖${stop.address ? ` · ${stop.address}` : ''}` : `${stop.address || '地點地址未提供'} · ${stop.coordinates ? '已輸入座標（請確認來源）' : '尚無座標'}`}</p><details className="stop-details"><summary>更多資訊 · 營業時間{stop.openingHoursStatus === 'confirmed' && stop.openingHours?.trim() && stop.openingHoursSource?.trim() && stop.openingHoursCheckedAt ? '已確認' : stop.openingHoursStatus === 'confirmed' ? '資料未齊' : '待確認'}</summary><div className="stop-details-body"><p><strong>營業時間</strong>{stop.openingHours?.trim() || '尚未提供'}</p><p><strong>狀態</strong>{stop.openingHoursStatus === 'confirmed' && stop.openingHours?.trim() && stop.openingHoursSource?.trim() && stop.openingHoursCheckedAt ? `已確認 · ${stop.openingHoursCheckedAt} · ${stop.openingHoursSource}` : '待確認；尚未核實資料'}</p>{stop.notes && <p className="stop-notes">{stop.notes}</p>}</div></details><div className="inline-actions">{authRole === 'admin' && <><button onClick={() => setEditing(stop.id)}>編輯</button><button disabled={index === 0} onClick={() => moveStop(index, -1)}>上移</button><button disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}>下移</button></>}{!stop.hideFromMap && <a target="_blank" rel="noreferrer" href={buildAmapPlaceSearchUrl(stop.name, trip.destination, stop.address)}>地圖查看 ↗</a>}</div></>}
+                    </form> : <>
+                      <span className="tag soft">{stop.duration === 0 ? '時間點' : `自由行程 · ${stop.duration}${stop.durationMax !== undefined && stop.durationMax > stop.duration ? `–${stop.durationMax}` : ''} 分鐘`}</span>
+                      <h4>{stop.name || '未命名景點'}</h4>
+                      <p>
+                        {stop.hideFromMap ? `非地點行程 · 不顯示於地圖${stop.address ? ` · ${stop.address}` : ''}` : `${stop.address || '地點地址未提供'} · ${stop.coordinates ? '已輸入座標（請確認來源）' : '尚無座標'}`}
+                        {stop.address.trim() && <button
+                          type="button"
+                          className="copy-address-button"
+                          aria-label={addressCopyFeedback?.stopId === stop.id && addressCopyFeedback.status === 'copied' ? '地址已複製' : '複製地址'}
+                          title={addressCopyFeedback?.stopId === stop.id && addressCopyFeedback.status === 'copied' ? '地址已複製' : '複製地址'}
+                          onClick={() => { void copyStopAddress(stop.id, stop.address) }}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            {addressCopyFeedback?.stopId === stop.id && addressCopyFeedback.status === 'copied'
+                              ? <path d="m5 12 4 4L19 6" />
+                              : <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></>}
+                          </svg>
+                        </button>}
+                      </p>
+                      {addressCopyFeedback?.stopId === stop.id && <p className={`address-copy-feedback ${addressCopyFeedback.status}`} role={addressCopyFeedback.status === 'failed' ? 'alert' : 'status'}>
+                        {addressCopyFeedback.status === 'copied' ? '地址已複製' : '複製失敗，請確認瀏覽器剪貼簿權限後重試。'}
+                      </p>}
+                      <details className="stop-details"><summary>更多資訊 · 營業時間{stop.openingHoursStatus === 'confirmed' && stop.openingHours?.trim() && stop.openingHoursSource?.trim() && stop.openingHoursCheckedAt ? '已確認' : stop.openingHoursStatus === 'confirmed' ? '資料未齊' : '待確認'}</summary><div className="stop-details-body"><p><strong>營業時間</strong>{stop.openingHours?.trim() || '尚未提供'}</p><p><strong>狀態</strong>{stop.openingHoursStatus === 'confirmed' && stop.openingHours?.trim() && stop.openingHoursSource?.trim() && stop.openingHoursCheckedAt ? `已確認 · ${stop.openingHoursCheckedAt} · ${stop.openingHoursSource}` : '待確認；尚未核實資料'}</p>{stop.notes && <p className="stop-notes">{stop.notes}</p>}</div></details>
+                      <div className="inline-actions">{authRole === 'admin' && <><button onClick={() => setEditing(stop.id)}>編輯</button><button disabled={index === 0} onClick={() => moveStop(index, -1)}>上移</button><button disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}>下移</button></>}{!stop.hideFromMap && <a target="_blank" rel="noreferrer" href={buildAmapPlaceSearchUrl(stop.name, trip.destination, stop.address)}>地圖查看 ↗</a>}</div>
+                    </>}
                   </div></div>
                   {index < stops.length - 1 && !stop.hideFromMap && !stops[index + 1].hideFromMap && <div className="transfer">↳ 移動時間尚未驗證{mapApiKey && hasValidCoordinates(stop.coordinates) && hasValidCoordinates(stops[index + 1].coordinates) && <> · <a href={amapWalkingRoute(stop.coordinates, stops[index + 1].coordinates, stops[index + 1].name, mapApiKey)} target="_blank" rel="noreferrer">用高德 LightMap 查看此段 ↗</a></>}</div>}
                 </div>)}

@@ -93,3 +93,10 @@
 .stop-details { margin-top: 10px; padding-top: 8px; border-top: 1px solid #eef2eb; }.stop-details summary { color: #52785c; cursor: pointer; font-size: 11px; font-weight: 700; list-style: none; }.stop-details summary::-webkit-details-marker { display: none; }.stop-details summary::after { content: '＋'; float: right; }.stop-details[open] summary::after { content: '−'; }.stop-details-body { display: grid; gap: 5px; padding-top: 9px; }.stop-details-body p { color: #819486; font-size: 11px; line-height: 1.7; }.stop-details-body strong { color: #4c6b55; margin-right: 8px; }.event form select { display: block; width: 100%; margin-top: 6px; padding: 9px; border: 1px solid #e1e9e0; border-radius: 6px; background: white; color: #294938; font-size: 12px; }
 .workspace { grid-template-columns: minmax(0, 1fr); }
 .notepad-save { margin-top: 12px; }.notepad-save:disabled { cursor: not-allowed; opacity: .65; }.notepad-save-confirmation { margin: 10px 0 0; color: #34734f; font-size: 12px; }
+.copy-address-button { display: inline-grid; place-items: center; vertical-align: middle; margin-left: 8px; width: 26px; height: 26px; padding: 4px; border: 1px solid #e3ebe2; border-radius: 6px; background: #f7faf6; color: #52785c; cursor: pointer; }
+.copy-address-button:hover { background: #eaf3e7; color: #2e6a48; }
+.copy-address-button:focus-visible { outline: 2px solid #408565; outline-offset: 2px; }
+.copy-address-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.address-copy-feedback { margin: 4px 0 0 !important; font-size: 11px !important; }
+.address-copy-feedback.copied { color: #34734f !important; }
+.address-copy-feedback.failed { color: #a84242 !important; }
