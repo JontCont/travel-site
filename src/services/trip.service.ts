@@ -18,6 +18,8 @@ export function defineTrip(input: DefineTripInput): Trip {
     hotelName: input.hotelName ?? '',
     hotelAddress: input.hotelAddress ?? '',
     ...(input.hotelCoordinates ? { hotelCoordinates: input.hotelCoordinates } : {}),
+    ...(input.hotelDetails ? { hotelDetails: input.hotelDetails } : {}),
+    ...(input.hotelFacilityGroups ? { hotelFacilityGroups: input.hotelFacilityGroups } : {}),
     days: Object.fromEntries(listDates(input.startDate, input.endDate)
       .map((date) => [date, input.days?.[date] ?? []])),
     travelers: input.travelers ?? [],

@@ -7,6 +7,7 @@ export type Stop = {
   durationMax?: number
   notes?: string
   coordinates: string
+  hideFromMap?: boolean
   openingHours?: string
   openingHoursStatus?: 'unverified' | 'confirmed'
   openingHoursSource?: string
@@ -24,6 +25,15 @@ export type Flight = {
   arrivalAirport: string
   arrivalTerminal: string
 }
+export type HotelFacilityGroup = { category: string; items: string[] }
+export type HotelDetails = {
+  phone?: string
+  rating?: { score: number; scale: number }
+  referencePrice?: string
+  category?: string
+  source?: string
+  checkedAt?: string
+}
 export type Trip = {
   id: string
   title: string
@@ -37,6 +47,8 @@ export type Trip = {
   hotelName: string
   hotelAddress: string
   hotelCoordinates?: string
+  hotelDetails?: HotelDetails
+  hotelFacilityGroups?: HotelFacilityGroup[]
   days: Record<string, Stop[]>
   travelers: Traveler[]
   outboundFlight?: Flight
@@ -62,6 +74,8 @@ export type DefineTripInput = {
   hotelName?: string
   hotelAddress?: string
   hotelCoordinates?: string
+  hotelDetails?: HotelDetails
+  hotelFacilityGroups?: HotelFacilityGroup[]
   days?: Record<string, Stop[]>
   travelers?: Traveler[]
   outboundFlight?: Flight

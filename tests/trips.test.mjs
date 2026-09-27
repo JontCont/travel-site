@@ -104,8 +104,46 @@ test('validates stop time points, duration ranges, and per-person baggage counts
 test('accepts only complete workspace DTOs with one valid active trip', () => {
   const trip = makeTrip()
   assert.equal(isTripWorkspaceDto({ trips: [trip], activeTripId: trip.id }), true)
+  assert.equal(isTripWorkspaceDto({
+    trips: [{ ...trip, hotelFacilityGroups: [{ category: '網路', items: ['公共空間 Wi-Fi（免費）'] }] }],
+    activeTripId: trip.id,
+  }), true)
+  assert.equal(isTripWorkspaceDto({
+    trips: [{ ...trip, hotelFacilityGroups: [{ category: '網路', items: [false] }] }],
+    activeTripId: trip.id,
+  }), false)
+  assert.equal(isTripWorkspaceDto({
+    trips: [{ ...trip, days: { ...trip.days, '2026-05-15': [{ ...trip.days['2026-05-15'][0], hideFromMap: true }] } }],
+    activeTripId: trip.id,
+  }), true)
+  assert.equal(isTripWorkspaceDto({
+    trips: [{ ...trip, days: { ...trip.days, '2026-05-15': [{ ...trip.days['2026-05-15'][0], hideFromMap: 'yes' }] } }],
+    activeTripId: trip.id,
+  }), false)
   assert.equal(isTripWorkspaceDto({ trips: [trip], activeTripId: 'missing' }), false)
   assert.equal(isTripWorkspaceDto({ trips: [trip, trip], activeTripId: trip.id }), false)
+})
+
+test('validates hotel contact, rating, reference price, and source details', () => {
+  const trip = makeTrip({
+    hotelDetails: {
+      phone: '059183508555',
+      rating: { score: 4.7, scale: 5 },
+      referencePrice: '￥322',
+      category: '高檔型',
+      source: '旅客提供的高德地圖資訊',
+      checkedAt: '2026-09-27',
+    },
+  })
+  assert.equal(isTripWorkspaceDto({ trips: [trip], activeTripId: trip.id }), true)
+  assert.equal(isTripWorkspaceDto({
+    trips: [{ ...trip, hotelDetails: { ...trip.hotelDetails, rating: { score: 5.1, scale: 5 } } }],
+    activeTripId: trip.id,
+  }), false)
+  assert.equal(isTripWorkspaceDto({
+    trips: [{ ...trip, hotelDetails: { ...trip.hotelDetails, checkedAt: '2026-02-30' } }],
+    activeTripId: trip.id,
+  }), false)
 })
 
 test('persists per-trip notepad text and validates its DTO type', () => {

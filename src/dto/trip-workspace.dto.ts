@@ -1,4 +1,4 @@
-import type { Flight, Stop, Traveler, Trip, TripWorkspace } from '../models/trip.ts'
+import type { Flight, HotelDetails, HotelFacilityGroup, Stop, Traveler, Trip, TripWorkspace } from '../models/trip.ts'
 import { isLocalDate, listDates } from '../services/date.service.ts'
 
 export type StopDto = Stop
@@ -20,6 +20,7 @@ function isStop(value: unknown): value is StopDto {
     (value.durationMax === undefined ||
       (typeof value.durationMax === 'number' && Number.isFinite(value.durationMax) && value.durationMax >= value.duration)) &&
     (value.notes === undefined || typeof value.notes === 'string') &&
+    (value.hideFromMap === undefined || typeof value.hideFromMap === 'boolean') &&
     (value.openingHours === undefined || typeof value.openingHours === 'string') &&
     (value.openingHoursStatus === undefined || value.openingHoursStatus === 'unverified' || value.openingHoursStatus === 'confirmed') &&
     (value.openingHoursSource === undefined || typeof value.openingHoursSource === 'string') &&
@@ -36,6 +37,27 @@ function isFlight(value: unknown): value is FlightDto {
   return isRecord(value) &&
     ['airline', 'number', 'departureTime', 'departureAirport', 'departureTerminal', 'arrivalTime', 'arrivalAirport', 'arrivalTerminal']
       .every((key) => typeof value[key] === 'string')
+}
+
+function isHotelFacilityGroup(value: unknown): value is HotelFacilityGroup {
+  return isRecord(value) && typeof value.category === 'string' &&
+    Array.isArray(value.items) && value.items.every((item) => typeof item === 'string')
+}
+
+function isHotelDetails(value: unknown): value is HotelDetails {
+  if (!isRecord(value) ||
+    (value.phone !== undefined && typeof value.phone !== 'string') ||
+    (value.referencePrice !== undefined && typeof value.referencePrice !== 'string') ||
+    (value.category !== undefined && typeof value.category !== 'string') ||
+    (value.source !== undefined && typeof value.source !== 'string') ||
+    (value.checkedAt !== undefined && (typeof value.checkedAt !== 'string' || !isLocalDate(value.checkedAt)))) return false
+  if (value.rating !== undefined) {
+    if (!isRecord(value.rating) ||
+      typeof value.rating.score !== 'number' || !Number.isFinite(value.rating.score) ||
+      typeof value.rating.scale !== 'number' || !Number.isFinite(value.rating.scale) ||
+      value.rating.scale <= 0 || value.rating.score < 0 || value.rating.score > value.rating.scale) return false
+  }
+  return true
 }
 
 export function isTripDto(value: unknown): value is TripDto {
@@ -61,6 +83,9 @@ export function isTripDto(value: unknown): value is TripDto {
       return !Array.isArray(day) || !day.every(isStop)
     })) return false
   if (value.hotelCoordinates !== undefined && typeof value.hotelCoordinates !== 'string') return false
+  if (value.hotelDetails !== undefined && !isHotelDetails(value.hotelDetails)) return false
+  if (value.hotelFacilityGroups !== undefined &&
+    (!Array.isArray(value.hotelFacilityGroups) || !value.hotelFacilityGroups.every(isHotelFacilityGroup))) return false
   if (value.outboundFlight !== undefined && !isFlight(value.outboundFlight)) return false
   if (value.returnFlight !== undefined && !isFlight(value.returnFlight)) return false
   if (value.carryOnKg !== undefined && (typeof value.carryOnKg !== 'number' || !Number.isFinite(value.carryOnKg))) return false
