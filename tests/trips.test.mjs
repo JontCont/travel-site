@@ -146,6 +146,14 @@ test('validates hotel contact, rating, reference price, and source details', () 
   }), false)
 })
 
+test('accepts only https photo share URLs on a trip', () => {
+  const trip = makeTrip({ photoShareUrl: 'https://immich.example.com/share/abc' })
+  assert.equal(isTripWorkspaceDto({ trips: [trip], activeTripId: trip.id }), true)
+  for (const photoShareUrl of ['javascript:alert(1)', 'http://immich.example.com/share/abc', 'not a url', 123]) {
+    assert.equal(isTripWorkspaceDto({ trips: [{ ...trip, photoShareUrl }], activeTripId: trip.id }), false)
+  }
+})
+
 test('persists per-trip notepad text and validates its DTO type', () => {
   const trip = makeTrip({ notepad: '訂位代碼：ABC123\n集合地點待確認' })
   assert.equal(trip.notepad, '訂位代碼：ABC123\n集合地點待確認')

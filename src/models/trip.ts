@@ -59,6 +59,7 @@ export type Trip = {
   hotelFacilityGroups?: HotelFacilityGroup[]
   days: Record<string, Stop[]>
   footprints?: Footprint[]
+  photoShareUrl?: string
   travelers: Traveler[]
   outboundFlight?: Flight
   returnFlight?: Flight

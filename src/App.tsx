@@ -149,7 +149,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'footprints'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'footprints' | 'photos'>('overview')
   const [footprintError, setFootprintError] = useState('')
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
@@ -503,6 +503,7 @@ function App() {
             <button className={tab === 'travelers' ? 'selected' : ''} onClick={() => setTab('travelers')}>旅客與座位</button>
             <button className={tab === 'notepad' ? 'selected' : ''} onClick={() => setTab('notepad')}>記事本</button>
             {!isChinaTrip(trip.country) && <button className={tab === 'footprints' ? 'selected' : ''} onClick={() => setTab('footprints')}>足跡</button>}
+            <button className={tab === 'photos' ? 'selected' : ''} onClick={() => setTab('photos')}>相簿</button>
           </nav>
           {tab === 'itinerary' && <>
             <div className="section-heading"><div><span className="overline">YOUR ITINERARY</span><h2>每天，都有新的風景。</h2></div><span className="muted">當地時間 · {trip.timeZone}</span></div>
@@ -564,6 +565,22 @@ function App() {
               </section>
             </div>
           </>}
+          {tab === 'photos' && <section className="details-grid photos-grid">
+            <div>
+              <h2>旅程相簿</h2>
+              {authRole === 'admin' && <form key={trip.id} className="inline-actions" onSubmit={(event) => {
+                event.preventDefault()
+                const value = String(new FormData(event.currentTarget).get('photoShareUrl') ?? '').trim()
+                updateTrip((current) => ({ ...current, photoShareUrl: value || undefined }))
+              }}>
+                <input name="photoShareUrl" type="url" placeholder="https://immich 分享連結" defaultValue={trip.photoShareUrl ?? ''} />
+                <button type="submit">儲存相簿連結</button>
+              </form>}
+            </div>
+            {trip.photoShareUrl
+              ? <iframe className="photos-frame" title="旅程相簿" src={trip.photoShareUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+              : <p className="muted">尚未設定相簿連結。</p>}
+          </section>}
           {tab === 'footprints' && !isChinaTrip(trip.country) && <section className="details-grid">
             <div>
               <h2>足跡匯入</h2>

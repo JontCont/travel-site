@@ -28,6 +28,15 @@ function isStop(value: unknown): value is StopDto {
       (typeof value.openingHoursCheckedAt === 'string' && isLocalDate(value.openingHoursCheckedAt)))
 }
 
+function isHttpsUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 function isFootprint(value: unknown): value is Footprint {
   return isRecord(value) &&
     typeof value.id === 'string' && value.id !== '' &&
@@ -93,6 +102,7 @@ export function isTripDto(value: unknown): value is TripDto {
     })) return false
   if (value.hotelCoordinates !== undefined && typeof value.hotelCoordinates !== 'string') return false
   if (value.footprints !== undefined && (!Array.isArray(value.footprints) || !value.footprints.every(isFootprint))) return false
+  if (value.photoShareUrl !== undefined && !isHttpsUrl(value.photoShareUrl)) return false
   if (value.hotelDetails !== undefined && !isHotelDetails(value.hotelDetails)) return false
   if (value.hotelFacilityGroups !== undefined &&
     (!Array.isArray(value.hotelFacilityGroups) || !value.hotelFacilityGroups.every(isHotelFacilityGroup))) return false
