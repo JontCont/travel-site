@@ -14,6 +14,14 @@ export type Stop = {
   openingHoursCheckedAt?: string
 }
 
+export type Footprint = {
+  id: string
+  startedAt: string
+  endedAt: string
+  name?: string
+  coordinates: string
+}
+
 export type Traveler = { id: string; name: string; outbound: string; inbound: string }
 export type Flight = {
   airline: string
@@ -50,6 +58,7 @@ export type Trip = {
   hotelDetails?: HotelDetails
   hotelFacilityGroups?: HotelFacilityGroup[]
   days: Record<string, Stop[]>
+  footprints?: Footprint[]
   travelers: Traveler[]
   outboundFlight?: Flight
   returnFlight?: Flight

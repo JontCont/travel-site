@@ -4,12 +4,9 @@ import { getTripStatus, sortTripsNearToFar, type TripStatus } from './services/d
 import { listDates } from './services/trip.service'
 import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
 import { getAuthStatus, loginWithAccessCode, logout as logoutFromServer, type AccessRole } from './services/auth.service'
-import { buildAmapPlaceSearchUrl, getMapApiKey } from './services/map.service'
+import { buildGoogleDirectionsUrl, buildGoogleMapsCoordinateUrl, buildTripMapSearchUrl, getMapApiKey, isChinaTrip, routeModeLabels, type RouteMode } from './services/map.service'
+import { mergeFootprints, parseTimelineExport } from './services/footprint.service'
 import './App.scss'
-
-function amapSearch(keyword: string, city: string) {
-  return buildAmapPlaceSearchUrl(keyword, city)
-}
 
 function amapWalkingRoute(origin: string, destination: string, destinationName: string, key: string) {
   const url = new URL('https://m.amap.com/navi/')
@@ -152,7 +149,8 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'footprints'>('overview')
+  const [footprintError, setFootprintError] = useState('')
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
   const [mapApiKey, setMapApiKey] = useState('')
@@ -297,6 +295,21 @@ function App() {
       ...workspace,
       trips: workspace.trips.map((item) => item.id === trip.id ? update(item) : item),
     })
+  }
+
+  async function importFootprints(file: File) {
+    if (!trip) return
+    try {
+      const incoming = parseTimelineExport(JSON.parse(await file.text()), {
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        timeZone: trip.timeZone,
+      })
+      setFootprintError(incoming.length ? '' : '此檔案在旅程日期內沒有可用的足跡紀錄。')
+      updateTrip((current) => ({ ...current, footprints: mergeFootprints(current.footprints, incoming) }))
+    } catch (error) {
+      setFootprintError(error instanceof Error ? error.message : '匯入失敗，請確認檔案格式。')
+    }
   }
 
   function updateViewerNotepad(tripId: string, value: string) {
@@ -481,7 +494,7 @@ function App() {
           </section>
           <div className="summary-row">
             <button className="summary-card" onClick={() => setTab('flights')}><span className="summary-icon peach">✈</span><span><strong>航班資訊</strong><small>{trip.outboundFlight ? `${trip.outboundFlight.airline} · ${trip.outboundFlight.number}${trip.returnFlight ? ` / ${trip.returnFlight.number}` : ''}` : '尚未新增航班資料'}</small></span><span className="arrow">↗</span></button>
-            {trip.hotelName ? <a className="summary-card" href={amapSearch(`${trip.hotelName} ${trip.hotelAddress}`, trip.destination)} target="_blank" rel="noreferrer"><span className="summary-icon green">⌂</span><span><strong>入住住宿</strong><small>{trip.hotelName}</small></span><span className="arrow">↗</span></a> : <button className="summary-card" onClick={() => setTab('flights')}><span className="summary-icon green">⌂</span><span><strong>入住住宿</strong><small>尚未新增住宿資訊</small></span><span className="arrow">↗</span></button>}
+            {trip.hotelName ? <a className="summary-card" href={buildTripMapSearchUrl(trip, trip.hotelName, trip.hotelAddress)} target="_blank" rel="noreferrer"><span className="summary-icon green">⌂</span><span><strong>入住住宿</strong><small>{trip.hotelName}</small></span><span className="arrow">↗</span></a> : <button className="summary-card" onClick={() => setTab('flights')}><span className="summary-icon green">⌂</span><span><strong>入住住宿</strong><small>尚未新增住宿資訊</small></span><span className="arrow">↗</span></button>}
             <button className="summary-card" onClick={() => setTab('travelers')}><span className="summary-icon blue">♙</span><span><strong>同行旅客</strong><small>{trip.travelers.length ? `已儲存 ${trip.travelers.length} 位` : '尚未新增旅客'}</small></span><span className="arrow">↗</span></button>
           </div>
           <nav className="tabs" aria-label="旅程分頁">
@@ -489,6 +502,7 @@ function App() {
             <button className={tab === 'flights' ? 'selected' : ''} onClick={() => setTab('flights')}>航班與住宿</button>
             <button className={tab === 'travelers' ? 'selected' : ''} onClick={() => setTab('travelers')}>旅客與座位</button>
             <button className={tab === 'notepad' ? 'selected' : ''} onClick={() => setTab('notepad')}>記事本</button>
+            {!isChinaTrip(trip.country) && <button className={tab === 'footprints' ? 'selected' : ''} onClick={() => setTab('footprints')}>足跡</button>}
           </nav>
           {tab === 'itinerary' && <>
             <div className="section-heading"><div><span className="overline">YOUR ITINERARY</span><h2>每天，都有新的風景。</h2></div><span className="muted">當地時間 · {trip.timeZone}</span></div>
@@ -540,16 +554,32 @@ function App() {
                         {addressCopyFeedback.status === 'copied' ? '地址已複製' : '複製失敗，請確認瀏覽器剪貼簿權限後重試。'}
                       </p>}
                       <details className="stop-details"><summary>更多資訊 · 營業時間{stop.openingHoursStatus === 'confirmed' && stop.openingHours?.trim() && stop.openingHoursSource?.trim() && stop.openingHoursCheckedAt ? '已確認' : stop.openingHoursStatus === 'confirmed' ? '資料未齊' : '待確認'}</summary><div className="stop-details-body"><p><strong>營業時間</strong>{stop.openingHours?.trim() || '尚未提供'}</p><p><strong>狀態</strong>{stop.openingHoursStatus === 'confirmed' && stop.openingHours?.trim() && stop.openingHoursSource?.trim() && stop.openingHoursCheckedAt ? `已確認 · ${stop.openingHoursCheckedAt} · ${stop.openingHoursSource}` : '待確認；尚未核實資料'}</p>{stop.notes && <p className="stop-notes">{stop.notes}</p>}</div></details>
-                      <div className="inline-actions">{authRole === 'admin' && <><button onClick={() => setEditing(stop.id)}>編輯</button><button disabled={index === 0} onClick={() => moveStop(index, -1)}>上移</button><button disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}>下移</button></>}{!stop.hideFromMap && <a target="_blank" rel="noreferrer" href={buildAmapPlaceSearchUrl(stop.name, trip.destination, stop.address)}>地圖查看 ↗</a>}</div>
+                      <div className="inline-actions">{authRole === 'admin' && <><button onClick={() => setEditing(stop.id)}>編輯</button><button disabled={index === 0} onClick={() => moveStop(index, -1)}>上移</button><button disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}>下移</button></>}{!stop.hideFromMap && <a target="_blank" rel="noreferrer" href={buildTripMapSearchUrl(trip, stop.name, stop.address)}>地圖查看 ↗</a>}</div>
                     </>}
                   </div></div>
-                  {index < stops.length - 1 && !stop.hideFromMap && !stops[index + 1].hideFromMap && <div className="transfer">↳ 移動時間尚未驗證{mapApiKey && hasValidCoordinates(stop.coordinates) && hasValidCoordinates(stops[index + 1].coordinates) && <> · <a href={amapWalkingRoute(stop.coordinates, stops[index + 1].coordinates, stops[index + 1].name, mapApiKey)} target="_blank" rel="noreferrer">用高德 LightMap 查看此段 ↗</a></>}</div>}
+                  {index < stops.length - 1 && !stop.hideFromMap && !stops[index + 1].hideFromMap && <div className="transfer">↳ 移動時間尚未驗證{mapApiKey && isChinaTrip(trip.country) && hasValidCoordinates(stop.coordinates) && hasValidCoordinates(stops[index + 1].coordinates) && <> · <a href={amapWalkingRoute(stop.coordinates, stops[index + 1].coordinates, stops[index + 1].name, mapApiKey)} target="_blank" rel="noreferrer">用高德 LightMap 查看此段 ↗</a></>}{!isChinaTrip(trip.country) && (['walking', 'transit', 'driving'] as RouteMode[]).map((mode) => <span key={mode}> · <a href={buildGoogleDirectionsUrl([stop.name, stop.address].filter(Boolean).join(' '), [stops[index + 1].name, stops[index + 1].address].filter(Boolean).join(' '), mode)} target="_blank" rel="noreferrer">Google 地圖{routeModeLabels[mode]}路線 ↗</a></span>)}</div>}
                 </div>)}
                 {isReturn && trip.returnFlight && <div className="event fixed"><div className="event-time">{trip.returnFlight.departureTime}<small>{trip.returnFlight.departureAirport}</small></div><span className="event-symbol">✈</span><div><span className="tag">固定行程 · 航班</span><h4>返程</h4><p>{trip.returnFlight.number} · {trip.returnFlight.departureAirport} {trip.returnFlight.departureTerminal} → {trip.returnFlight.arrivalAirport} {trip.returnFlight.arrivalTerminal} · {trip.returnFlight.arrivalTime} 抵達</p></div></div>}
                 {!stops.length && <div className="empty"><span>✧</span><strong>這一天，留給你自由安排。</strong><p>新增想去的地方，開始規劃屬於你的{trip.destination}路線。</p></div>}
               </section>
             </div>
           </>}
+          {tab === 'footprints' && !isChinaTrip(trip.country) && <section className="details-grid">
+            <div>
+              <h2>足跡匯入</h2>
+              <p className="muted">匯入 Google 地圖時間軸匯出的 JSON，只保留旅程日期內的紀錄，並以 Google 地圖開啟座標。</p>
+              {authRole === 'admin' && <div className="inline-actions">
+                <input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFootprints(file); event.target.value = '' }} />
+                {(trip.footprints?.length ?? 0) > 0 && <button onClick={() => updateTrip((current) => ({ ...current, footprints: [] }))}>清除足跡</button>}
+              </div>}
+              {footprintError && <p className="error">{footprintError}</p>}
+            </div>
+            {(trip.footprints?.length ?? 0) === 0 && <p className="muted">尚未匯入足跡。</p>}
+            {trip.footprints?.map((item) => <div key={item.id} className="inline-actions">
+              <span>{new Date(item.startedAt).toLocaleString('zh-TW', { timeZone: trip.timeZone, dateStyle: 'short', timeStyle: 'short' })}</span>
+              <a href={buildGoogleMapsCoordinateUrl(item.coordinates)} target="_blank" rel="noreferrer">{item.name ?? item.coordinates} 地圖查看 ↗</a>
+            </div>)}
+          </section>}
           {tab === 'flights' && <div className="details-grid">
             {(['outboundFlight', 'returnFlight'] as const).map((direction) => {
               const flight = trip[direction]
@@ -598,7 +628,7 @@ function App() {
               {trip.hotelDetails?.rating && <div className="read-only-value"><span>地圖評分</span><strong>{trip.hotelDetails.rating.score.toFixed(1)} / {trip.hotelDetails.rating.scale.toFixed(1)}</strong></div>}
               {trip.hotelDetails?.referencePrice && <div className="read-only-value"><span>參考價</span><strong>{trip.hotelDetails.referencePrice}</strong></div>}
               {trip.hotelDetails?.category && <div className="read-only-value"><span>住宿類型</span><strong>{trip.hotelDetails.category}</strong></div>}
-              {trip.hotelName && <a href={amapSearch(`${trip.hotelName} ${trip.hotelAddress}`, trip.destination)} target="_blank" rel="noreferrer">地圖查看住宿 ↗</a>}
+              {trip.hotelName && <a href={buildTripMapSearchUrl(trip, trip.hotelName, trip.hotelAddress)} target="_blank" rel="noreferrer">地圖查看住宿 ↗</a>}
               {trip.hotelDetails?.source && <p>住宿資訊來源：{trip.hotelDetails.source}{trip.hotelDetails.checkedAt ? ` · ${trip.hotelDetails.checkedAt} 更新` : ''}</p>}
               {trip.hotelFacilityGroups?.length ? <details className="hotel-facilities"><summary>飯店設施與服務 · {trip.hotelFacilityGroups.length} 類</summary><div className="hotel-facility-groups">{trip.hotelFacilityGroups.map((group) => <section key={group.category}><strong>{group.category}</strong><ul>{group.items.map((item) => <li key={item}>{item}</li>)}</ul></section>)}</div><p>依提供資料整理，設施供應及收費請以飯店現場資訊為準。</p></details> : null}
               <p>住宿資訊僅依提供內容顯示，不會自動驗證訂房狀態；參考價以實際訂房頁面為準。</p>
