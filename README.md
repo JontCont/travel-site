@@ -35,7 +35,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`AMAP_API_KEY` 用於開啟高德 LightMap 的步行導航連結，建議在高德控制台限制可使用的網域。網站的「檢查步行路線」會向伺服器查詢路線距離與時間，需另外設定高德 Web 服務 Key `AMAP_WEB_KEY`；JavaScript API Key 不能取代它。未設定 Web 服務 Key 時，路線會明確保持未驗證。
+`AMAP_API_KEY` 用於開啟高德 LightMap 的步行導航連結，建議在高德控制台限制可使用的網域。目前網站沒有步行檢查按鈕，行程中的交通線都會標示「移動時間尚未驗證」。伺服器仍保留 `/api/walk` 端點，查詢路線需另外設定高德 Web 服務 Key `AMAP_WEB_KEY`；JavaScript API Key 不能取代它。詳見 [walkable-map-routing](.github/skills/walkable-map-routing/SKILL.md)。
 
 停止服務：
 

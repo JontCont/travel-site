@@ -1,30 +1,43 @@
 ---
 name: travel-plan-foundation
-description: Use when designing or implementing a travel planner for future overseas trips, destinations, dates, bookings, day plans, or shared trip data consumed by an itinerary timeline and map. Also use for 出國計畫、旅程資料與行程管理.
+description: Use when changing this travel-site's trip data model: trips, dates, time zones, days, stops, lodging, flights, and workspace validation. Also use for 出國計畫、旅程資料與行程管理.
 ---
 
 # Travel plan foundation
 
-Create one dependable trip model before building timeline or map features. Follow existing project conventions and storage patterns; do not introduce a new framework or service just for this skill.
+The trip data model the app stores and validates. Types are in `src/models/trip.ts`, and validation is in `src/dto/trip-workspace.dto.ts`. Shared facts are in [project-reference](../project-reference/SKILL.md). Write paths are in [travel-record-writing](../travel-record-writing/SKILL.md).
+
+## Current model
+
+- Workspace: `{trips, activeTripId}`. The DTO requires a non-empty `trips` array and an `activeTripId` that matches a trip. Trip IDs must be unique.
+- Trip dates: `startDate` and `endDate` are local dates. `endDate` must not be before `startDate`.
+- `days` is a record keyed by date. Its keys must equal every date from `startDate` through `endDate`. Each value is that day's ordered stop list.
+- `timeZone` is one string per trip, not per day. The DTO checks only that it is a non-empty string, so an invalid name passes validation and fails later when dates are formatted.
+- `destination` is one string. A trip has one destination.
+- Lodging: `hotelName`, `hotelAddress`, and optional `hotelCoordinates`, `hotelDetails`, and `hotelFacilityGroups`.
+- Optional trip fields: `notepad`, `footprints`, `photoShareUrl` (https only, checked by the DTO), `travelers`, `outboundFlight`, `returnFlight`, and luggage limits (`carryOnKg`, `checkedBagKg`, `personalItemPieces`, `carryOnPieces`, `checkedBagPieces`).
+- Stop: `id`, `name`, `address`, `time` (HH:mm), `duration`, optional `durationMax`, `notes`, `coordinates` (a string; an empty value shows "尚無座標"), `hideFromMap`, and opening-hours fields (`openingHours`, `openingHoursStatus` as `unverified` or `confirmed`, `openingHoursSource`, `openingHoursCheckedAt`).
+- Not in the model: reservation windows, travel time between stops, stored route results, multiple destinations, and per-day time zones.
 
 ## Workflow
 
-1. Inspect the existing app, persistence layer, date handling, and tests. If the workspace is empty, propose the smallest viable structure before implementing.
-2. Confirm whether a trip is private or shared, how data is stored, and whether reservations and transport are in scope. Do not silently choose a backend or authentication scheme.
-3. Model a trip with an ID, title, destination(s), start and end **local dates**, and an IANA time zone for each destination/day. Keep times as local date/time plus zone or as instants with an explicit zone for display; never infer a destination's zone from the browser.
-4. Model each day with an ordered list of stops: stable ID, place name/address, optional coordinates and place ID, planned start/end or duration, optional fixed reservation window, notes, and transport mode to the next stop. Mark unconfirmed places and missing coordinates explicitly. Record lodging or the day's start/end anchor where relevant.
-5. Enforce start date <= end date, stop times within their day (or explicitly spanning midnight), and no overlapping fixed reservations. Keep draft stops valid without fabricated coordinates, opening hours, travel times, or prices.
-6. Expose create/edit/delete/reorder trip, day, and stop operations through the existing app patterns. Keep references by stable ID so timeline and map reflect the same source of truth after edits.
-7. Include an upcoming-trip overview, trip detail, day navigation, and clear empty/loading/error states. Show source and last-updated time for any external place details.
+1. Before you change the model, read `src/models/trip.ts`, `src/dto/trip-workspace.dto.ts`, and `tests/trips.test.mjs`. They are the source of truth.
+2. Add new fields as optional so that stored rows still pass the DTO. Then update the type, the DTO check, and a test case in `tests/trips.test.mjs`.
+3. Keep dates and day keys in step. A date edit must change the `days` keys in the same save, or the DTO rejects it.
+4. Do not store derived data (route results, travel minutes, computed conflicts) on stops. Compute it from the stored model when it is shown.
+5. For storage and write-path changes, follow [travel-record-writing](../travel-record-writing/SKILL.md).
+6. Validate with `npm test` and `npm run build`. See [validation.md](../project-reference/references/validation.md).
 
-## Shared contract
+## Known gaps
 
-- The timeline skill consumes the ordered day/stops and their time zone, times, durations, and reservation constraints.
-- The route skill consumes the same stop IDs and coordinates plus the day's start/end anchors. Its computed legs, durations, provenance, and warnings are **derived data**, not manually maintained distances on stops.
-- Editing or reordering a stop invalidates affected route estimates; do not keep stale route summaries or display an unchecked route as verified.
+- One time zone per trip, not validated as an IANA name. A trip that crosses time zones needs a model change first.
+- Multiple destinations are not supported.
+- Reservation windows and stop-to-stop travel time are not modeled.
+- Opening hours are free text, not structured hours.
 
 ## Acceptance
 
-- A future trip with multiple days can be saved, reopened, edited, and shown consistently in both day and map views.
-- A stop without coordinates remains visible as a draft but is not misrepresented as routed.
-- Cross-time-zone dates and fixed reservations retain their intended local times after reload.
+- A multi-day trip saves and reloads with the same dates, day keys, and stop IDs.
+- A workspace with `endDate` before `startDate`, mismatched `days` keys, duplicate trip IDs, or an `activeTripId` that matches no trip is rejected with 400, and the stored row does not change.
+- `photoShareUrl` accepts only https URLs.
+- A stop with empty `coordinates` shows "尚無座標" and gets no AMap transfer link.
