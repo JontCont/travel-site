@@ -77,6 +77,7 @@ function AccessGate({ configured, error, busy, code, onCodeChange, onSubmit, onS
       {!configured ? <p className="access-setup">{error ? '目前無法確認 NAS 登入服務狀態，請檢查伺服器與反向代理設定。' : <>NAS 尚未設定 Synology 登入。請在 <code>.env</code> 設定 <code>TRIP_OIDC_*</code> 後重新啟動網站。</>}</p> : <>
         <div className="access-methods">
           <button type="button" className="access-method" aria-expanded={codeOpen} onClick={() => setCodeOpen((open) => !open)}>通行碼</button>
+          <div className="access-divider"><span>或</span></div>
           <button type="button" className="access-method primary" onClick={onSynologyLogin}>Synology 登入</button>
         </div>
         {codeOpen && <form onSubmit={onSubmit}>

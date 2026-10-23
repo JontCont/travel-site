@@ -23,6 +23,8 @@
 .access-method:hover { background: #f3f6f1; }
 .access-method.primary { border-color: #2e6647; background: #2e6647; color: white; }
 .access-method.primary:hover { filter: brightness(.96); }
+.access-divider { display: flex; align-items: center; gap: 12px; color: #8da395; font-size: 11px; letter-spacing: .12em; }
+.access-divider::before, .access-divider::after { content: ""; flex: 1; height: 1px; background: #dce6dc; }
 .access-admin { max-width: 760px; padding-top: 25px; }
 .access-admin-description { margin: 0 0 18px; color: #819486; font-size: 12px; line-height: 1.8; }
 .access-admin h3 { margin: 0 0 12px; color: #214331; font-size: 15px; }
