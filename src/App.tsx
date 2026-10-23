@@ -307,7 +307,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'access'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access'>('overview')
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
   const [mapApiKey, setMapApiKey] = useState('')
@@ -655,6 +655,7 @@ function App() {
             <button className={tab === 'travelers' ? 'selected' : ''} onClick={() => setTab('travelers')}>旅客與座位</button>
             <button className={tab === 'notepad' ? 'selected' : ''} onClick={() => setTab('notepad')}>記事本</button>
             <button className={tab === 'photos' ? 'selected' : ''} onClick={() => setTab('photos')}>相簿</button>
+            {authRole === 'admin' && <button className={tab === 'settings' ? 'selected' : ''} onClick={() => setTab('settings')}>設定</button>}
           </nav>
           {tab === 'itinerary' && <>
             <div className="section-heading"><div><span className="overline">YOUR ITINERARY</span><h2>每天，都有新的風景。</h2></div><span className="muted">當地時間 · {trip.timeZone}</span></div>
@@ -719,19 +720,22 @@ function App() {
           {tab === 'photos' && <section className="details-grid photos-grid">
             <div>
               <h2>旅程相簿</h2>
-              {authRole === 'admin' && <form key={trip.id} className="inline-actions" onSubmit={(event) => {
-                event.preventDefault()
-                const value = String(new FormData(event.currentTarget).get('photoShareUrl') ?? '').trim()
-                updateTrip((current) => ({ ...current, photoShareUrl: value || undefined }))
-              }}>
-                <input name="photoShareUrl" type="url" placeholder="https://immich 分享連結" defaultValue={trip.photoShareUrl ?? ''} />
-                <button type="submit">儲存相簿連結</button>
-              </form>}
             </div>
             {trip.photoShareUrl
               ? <iframe className="photos-frame" title="旅程相簿" src={trip.photoShareUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
               : <p className="muted">尚未設定相簿連結。</p>}
           </section>}
+          {tab === 'settings' && authRole === 'admin' && <div className="settings-panel">
+            <div className="section-heading"><div><span className="overline">TRIP SETTINGS</span><h2>行程設定</h2></div></div>
+            <form key={trip.id} className="settings-form" onSubmit={(event) => {
+              event.preventDefault()
+              const value = String(new FormData(event.currentTarget).get('photoShareUrl') ?? '').trim()
+              updateTrip((current) => ({ ...current, photoShareUrl: value || undefined }))
+            }}>
+              <label>相簿連結（Immich 分享）<input name="photoShareUrl" type="url" placeholder="https://immich 分享連結" defaultValue={trip.photoShareUrl ?? ''} /></label>
+              <div className="form-actions"><button type="submit">儲存相簿連結</button></div>
+            </form>
+          </div>}
           {tab === 'flights' && <div className="details-grid">
             {(['outboundFlight', 'returnFlight'] as const).map((direction) => {
               const flight = trip[direction]

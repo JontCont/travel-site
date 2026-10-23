@@ -9,9 +9,9 @@ Embed a shared photo album per trip using the trip model in `../travel-plan-foun
 
 ## Workflow
 
-1. Store the link as `photoShareUrl` on the trip (https only). Set it through the admin form or, for a known trip, update the `workspace` row in `data/trips.sqlite`. Follow the direct SQL rules in [travel-record-writing](../travel-record-writing/SKILL.md), then read back the value. Do not hard-code URLs in code.
+1. Store the link as `photoShareUrl` on the trip (https only). Set it in the trip's 設定 tab, which only admins see, or, for a known trip, update the `workspace` row in `data/trips.sqlite`. Follow the direct SQL rules in [travel-record-writing](../travel-record-writing/SKILL.md), then read back the value. Do not hard-code URLs in code.
 2. Keep the album available for every trip, including China trips. Do not gate it behind the China check used for AMap links.
-3. Render the album in a 相簿 tab as a full-width iframe (`photos-frame`). The section uses the classes `details-grid photos-grid`. Keep `photos-grid`, which forces a single column, so the album never sits beside text.
+3. Render the album in a 相簿 tab as a full-width iframe (`photos-frame`). The section uses the classes `details-grid photos-grid`. Keep `photos-grid`, which forces a single column, so the album never sits beside text. The 相簿 tab is read-only; the link input lives only in the 設定 tab (`settings-panel`, `settings-form`).
 4. Keep the section copy minimal. The heading is enough; do not add explanatory text about the embed mechanism.
 5. Verify the embed from an `http://` origin (for example `localhost`), not a `data:` page. A `data:` parent is an opaque origin, and Immich then fails on `localStorage` with a 500 error. This is a test artifact, not an app bug.
 6. The live app requires the NAS passcode to log in. If you cannot log in, say so explicitly rather than claiming the tab was visually verified.
@@ -26,5 +26,6 @@ Embed a shared photo album per trip using the trip model in `../travel-plan-foun
 
 - A trip with a valid https share link shows the album in the 相簿 tab, full width.
 - A trip without a link shows the "尚未設定相簿連結。" empty state.
-- Clearing the admin field removes `photoShareUrl` from the trip.
+- The 設定 tab is visible only to admins. Saving the 相簿連結 field there updates the 相簿 tab.
+- Clearing the 設定 field removes `photoShareUrl` from the trip.
 - The DTO test rejects `javascript:` and `http:` links.
