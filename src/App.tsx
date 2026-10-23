@@ -3,7 +3,19 @@ import type { Trip, TripWorkspace } from './models/trip'
 import { getTripStatus, sortTripsNearToFar, type TripStatus } from './services/date.service'
 import { listDates } from './services/trip.service'
 import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
-import { getAuthStatus, loginWithAccessCode, logout as logoutFromServer, type AccessRole } from './services/auth.service'
+import {
+  clearAuthErrorFromUrl,
+  createAccessCode,
+  getAuthStatus,
+  listAccessCodes,
+  loginWithAccessCode,
+  logout as logoutFromServer,
+  readAuthErrorFromUrl,
+  revokeAccessCode,
+  startSynologyLogin,
+  type AccessCodeSummary,
+  type AccessRole,
+} from './services/auth.service'
 import { buildGoogleDirectionsUrl, buildTripMapSearchUrl, getMapApiKey, isChinaTrip, routeModeLabels, type RouteMode } from './services/map.service'
 import './App.scss'
 
@@ -37,6 +49,12 @@ const tripStatusLabels: Record<TripStatus, string> = {
   ended: '結束',
 }
 
+const roleLabels: Record<AccessRole, string> = {
+  admin: '管理員',
+  viewer: 'NAS 使用者（唯讀）',
+  code: '訪客唯讀',
+}
+
 type AccessGateProps = {
   configured: boolean
   error: string
@@ -44,31 +62,38 @@ type AccessGateProps = {
   code: string
   onCodeChange: (value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSynologyLogin: () => void
 }
 
-function AccessGate({ configured, error, busy, code, onCodeChange, onSubmit }: AccessGateProps) {
+function AccessGate({ configured, error, busy, code, onCodeChange, onSubmit, onSynologyLogin }: AccessGateProps) {
+  const [codeOpen, setCodeOpen] = useState(false)
   return <main className="access-page">
     <section className="access-card">
       <div className="access-brand"><span className="brand-mark">✳</span><span>途間 <small>TRIP STUDIO</small></span></div>
       <span className="overline">PRIVATE TRAVEL SPACE</span>
       <h1>旅程只和同行的人分享。</h1>
-      <p className="access-description">輸入 NAS 管理員或訪客通行碼。訪客只能查看，管理員可以編輯旅程。</p>
+      <p className="access-description">使用 Synology 帳號登入，或輸入管理員提供的訪客通行碼。NAS 管理員可以編輯旅程並發放通行碼。</p>
       {error && <p className="access-error" role="alert">{error}</p>}
-      {!configured ? <p className="access-setup">{error ? '目前無法連線到 NAS 登入服務，請確認伺服器狀態與反向代理設定。' : <>請在 NAS 設定至少 16 個字元、彼此不同的 <code>TRIP_VIEW_CODE</code> 與 <code>TRIP_ADMIN_CODE</code>，再重新啟動網站。</>}</p> : <form onSubmit={onSubmit}>
-        <label htmlFor="access-code">通行碼</label>
-        <input
-          id="access-code"
-          type="password"
-          autoComplete="current-password"
-          minLength={16}
-          required
-          value={code}
-          onChange={(event) => onCodeChange(event.target.value)}
-          placeholder="輸入通行碼"
-        />
-        <button type="submit" disabled={busy}>{busy ? '正在登入…' : '登入旅程'}</button>
-      </form>}
-      <p className="access-footnote">通行碼由 NAS 驗證，不會儲存在瀏覽器或旅程資料中。</p>
+      {!configured ? <p className="access-setup">{error ? '目前無法確認 NAS 登入服務狀態，請檢查伺服器與反向代理設定。' : <>NAS 尚未設定 Synology 登入。請在 <code>.env</code> 設定 <code>TRIP_OIDC_*</code> 後重新啟動網站。</>}</p> : <>
+        <div className="access-methods">
+          <button type="button" className="access-method" aria-expanded={codeOpen} onClick={() => setCodeOpen((open) => !open)}>通行碼</button>
+          <button type="button" className="access-method primary" onClick={onSynologyLogin}>Synology 登入</button>
+        </div>
+        {codeOpen && <form onSubmit={onSubmit}>
+          <label htmlFor="access-code">訪客通行碼</label>
+          <input
+            id="access-code"
+            type="password"
+            autoComplete="off"
+            required
+            value={code}
+            onChange={(event) => onCodeChange(event.target.value)}
+            placeholder="輸入通行碼"
+          />
+          <button type="submit" disabled={busy}>{busy ? '正在登入…' : '登入旅程'}</button>
+        </form>}
+      </>}
+      <p className="access-footnote">Synology 密碼只在 NAS 登入頁輸入，本站不會取得。通行碼只以雜湊形式保存在旅程資料庫，登入狀態以 HttpOnly Cookie 保存。</p>
     </section>
   </main>
 }
@@ -136,6 +161,143 @@ function NotepadPanel({ trip, authRole, onAdminChange, onViewerSaved }: NotepadP
   </section>
 }
 
+type AccessCodePanelProps = {
+  trips: Trip[]
+}
+
+function AccessCodePanel({ trips }: AccessCodePanelProps) {
+  const [codes, setCodes] = useState<AccessCodeSummary[]>([])
+  const [loadingCodes, setLoadingCodes] = useState(true)
+  const [listError, setListError] = useState('')
+  const [label, setLabel] = useState('')
+  const [selectedTripIds, setSelectedTripIds] = useState<string[]>([])
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createdCode, setCreatedCode] = useState<{ label: string; code: string } | null>(null)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+  const [revokeError, setRevokeError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    listAccessCodes()
+      .then((items) => { if (!cancelled) setCodes(items) })
+      .catch((error: unknown) => { if (!cancelled) setListError(error instanceof Error ? error.message : '讀取通行碼失敗。') })
+      .finally(() => { if (!cancelled) setLoadingCodes(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  function tripTitle(tripId: string) {
+    return trips.find((item) => item.id === tripId)?.title ?? '已移除的旅程'
+  }
+
+  function toggleTrip(tripId: string) {
+    setSelectedTripIds((current) => current.includes(tripId)
+      ? current.filter((id) => id !== tripId)
+      : [...current, tripId])
+  }
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmed = label.trim()
+    if (!trimmed || !selectedTripIds.length) return
+    setCreating(true)
+    setCreateError('')
+    setCopyStatus('idle')
+    try {
+      const created = await createAccessCode(trimmed, selectedTripIds)
+      setCodes((current) => [created.access, ...current])
+      setCreatedCode({ label: created.access.label, code: created.code })
+      setLabel('')
+      setSelectedTripIds([])
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : '建立通行碼失敗。')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function copyCreatedCode() {
+    if (!createdCode) return
+    if (!navigator.clipboard?.writeText) {
+      setCopyStatus('failed')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(createdCode.code)
+      setCopyStatus('copied')
+    } catch {
+      setCopyStatus('failed')
+    }
+  }
+
+  async function revoke(item: AccessCodeSummary) {
+    if (!window.confirm(`確定要撤銷「${item.label}」的通行碼？使用此通行碼的訪客將立即無法存取。`)) return
+    setRevokingId(item.id)
+    setRevokeError('')
+    try {
+      await revokeAccessCode(item.id)
+      setCodes((current) => current.filter((code) => code.id !== item.id))
+    } catch (error) {
+      setRevokeError(error instanceof Error ? error.message : '撤銷通行碼失敗。')
+    } finally {
+      setRevokingId(null)
+    }
+  }
+
+  const copyLabel = copyStatus === 'copied' ? '已複製' : copyStatus === 'failed' ? '複製失敗' : '複製'
+
+  return <section className="access-admin">
+    <div className="section-heading"><div><span className="overline">GUEST ACCESS</span><h2>訪客通行碼</h2></div></div>
+    <p className="access-admin-description">建立只能查看指定旅程的通行碼。通行碼只會顯示一次，離開此頁後無法再次取得，請立即複製給訪客。</p>
+
+    <form className="access-code-form" onSubmit={(event) => void handleCreate(event)}>
+      <label htmlFor="access-code-label">用途名稱</label>
+      <input
+        id="access-code-label"
+        type="text"
+        maxLength={60}
+        required
+        value={label}
+        onChange={(event) => setLabel(event.target.value)}
+        placeholder="例如：家人、同行朋友"
+      />
+      <fieldset className="access-trip-picker">
+        <legend>可查看的旅程</legend>
+        {trips.length ? trips.map((item) => <label key={item.id} className="access-trip-option">
+          <input type="checkbox" checked={selectedTripIds.includes(item.id)} onChange={() => toggleTrip(item.id)} />
+          <span>{item.title}</span>
+          <small>{item.destination}</small>
+        </label>) : <p className="access-admin-description">尚無旅程可指派。</p>}
+      </fieldset>
+      {createError && <p className="notice danger" role="alert">{createError}</p>}
+      <button type="submit" disabled={creating || !label.trim() || !selectedTripIds.length}>{creating ? '正在建立…' : '建立通行碼'}</button>
+    </form>
+
+    {createdCode && <div className="access-code-created" role="status">
+      <span>「{createdCode.label}」的通行碼（只顯示一次）</span>
+      <code>{createdCode.code}</code>
+      <button type="button" className="small-action" onClick={() => void copyCreatedCode()}>{copyLabel}</button>
+    </div>}
+
+    <div className="access-code-list">
+      <h3>已發放的通行碼</h3>
+      {listError && <p className="notice danger" role="alert">{listError}</p>}
+      {revokeError && <p className="notice danger" role="alert">{revokeError}</p>}
+      {loadingCodes && !listError && <p className="access-admin-description">正在讀取通行碼…</p>}
+      {!loadingCodes && !listError && !codes.length && <div className="empty"><span>◈</span><strong>尚未發放任何訪客通行碼</strong></div>}
+      {codes.map((item) => <article className="access-code-item" key={item.id}>
+        <div>
+          <strong>{item.label}</strong>
+          <small>{new Date(item.createdAt).toLocaleDateString('zh-TW')} 建立</small>
+        </div>
+        <p>{item.tripIds.length ? item.tripIds.map(tripTitle).join('、') : '未指派旅程'}</p>
+        <button type="button" className="small-action" disabled={revokingId === item.id} onClick={() => void revoke(item)}>{revokingId === item.id ? '撤銷中…' : '撤銷'}</button>
+      </article>)}
+    </div>
+  </section>
+}
+
 function App() {
   const [workspace, setWorkspace] = useState<TripWorkspace | null>(null)
   const [day, setDay] = useState('')
@@ -144,11 +306,11 @@ function App() {
   const [authConfigured, setAuthConfigured] = useState(false)
   const [authRole, setAuthRole] = useState<AccessRole | null>(null)
   const [authCode, setAuthCode] = useState('')
-  const [authError, setAuthError] = useState('')
+  const [authError, setAuthError] = useState(readAuthErrorFromUrl)
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'access'>('overview')
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
   const [mapApiKey, setMapApiKey] = useState('')
@@ -177,6 +339,7 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    clearAuthErrorFromUrl()
     async function initializeAccess() {
       try {
         const auth = await getAuthStatus()
@@ -185,10 +348,14 @@ function App() {
           setAuthRole(auth.authenticated ? auth.role : null)
         }
         if (!auth.configured || !auth.authenticated || !auth.role) return
-        const loadedWorkspace = await loadTripWorkspace(localStorage, auth.role === 'admin')
-        if (!cancelled) {
-          setWorkspace(loadedWorkspace)
-          setDay(loadedWorkspace.trips.find((trip) => trip.id === loadedWorkspace.activeTripId)?.startDate ?? '')
+        try {
+          const loadedWorkspace = await loadTripWorkspace(localStorage, auth.role === 'admin')
+          if (!cancelled) {
+            setWorkspace(loadedWorkspace)
+            setDay(loadedWorkspace.trips.find((trip) => trip.id === loadedWorkspace.activeTripId)?.startDate ?? '')
+          }
+        } catch (error) {
+          if (!cancelled) setLoadError(error instanceof Error ? error.message : '讀取旅程資料失敗。')
         }
       } catch (error) {
         if (!cancelled) setAuthError(error instanceof Error ? error.message : '無法確認登入狀態。')
@@ -237,7 +404,7 @@ function App() {
           setMapConfigError('')
           setEditing(null)
           setAuthCode('')
-          setAuthError('登入已逾時，請重新輸入通行碼。')
+          setAuthError('登入已逾時或已被撤銷，請重新登入。')
         }
       } catch (error) {
         if (!cancelled) setAuthError(error instanceof Error ? error.message : '確認登入狀態失敗。')
@@ -381,6 +548,7 @@ function App() {
       code={authCode}
       onCodeChange={setAuthCode}
       onSubmit={(event) => void handleLogin(event)}
+      onSynologyLogin={startSynologyLogin}
     />
   }
   if (loading) return <main className="load-error">正在讀取 NAS 旅程資料…</main>
@@ -429,17 +597,21 @@ function App() {
         <button className={`side-link ${tab === 'itinerary' ? 'active' : ''}`} onClick={() => setTab('itinerary')}>▦ <span>每日行程</span></button>
         <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => setTab('flights')}>✈ <span>航班與住宿</span></button>
         <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => setTab('travelers')}>♙ <span>同行旅客</span></button>
+        {authRole === 'admin' && <>
+          <div className="nav-label nav-section">管理</div>
+          <button className={`side-link ${tab === 'access' ? 'active' : ''}`} onClick={() => setTab('access')}>◈ <span>訪客通行碼</span></button>
+        </>}
         <div className="sidebar-bottom">
-          <span className="status-dot" /> NAS SQLite · {authRole === 'admin' ? '管理員' : '訪客唯讀'}
+          <span className="status-dot" /> NAS SQLite · {roleLabels[authRole]}
           <p>旅程資料由 NAS 儲存；請勿分享管理員通行碼。</p>
         </div>
       </aside>
       <main className="main">
-        <header className="topbar">{tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}<span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span><span className="top-right">{workspace.trips.length} 趟旅程 · {authRole === 'admin' ? '管理員' : '訪客唯讀'}</span><button className="logout-button" onClick={() => void handleLogout()}>登出</button></header>
+        <header className="topbar">{tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}<span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'access' ? '管理 / 訪客通行碼' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span><span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span><button className="logout-button" onClick={() => void handleLogout()}>登出</button></header>
         <div className="content">
           {saveError && <p className="notice danger" role="alert">SQLite 儲存失敗：{saveError}</p>}
           {authError && <p className="notice danger" role="alert">{authError}</p>}
-          {tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
+          {tab === 'access' && authRole === 'admin' ? <AccessCodePanel trips={workspace.trips} /> : tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
             <div className="eyebrow">MY TRIPS <span className="eyebrow-rule" /></div>
             <nav className="tabs home-tabs" aria-label="旅程總覽檢視">
               <button className={tab === 'overview' ? 'selected' : ''} onClick={() => setTab('overview')}>旅程卡片</button>

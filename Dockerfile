@@ -16,7 +16,7 @@ TRIP_DATABASE_PATH=/data/trips.sqlite \
     TRIP_COOKIE_SECURE=1
 
 COPY --from=build --chown=node:node /app/dist ./dist
-COPY --chown=node:node package.json route-api.mjs server.mjs ./
+COPY --chown=node:node package.json route-api.mjs oidc.mjs server.mjs ./
 COPY --chown=node:node src/dto/trip-workspace.dto.ts ./src/dto/trip-workspace.dto.ts
 COPY --chown=node:node src/services/date.service.ts ./src/services/date.service.ts
 RUN mkdir -p /data && chown node:node /data

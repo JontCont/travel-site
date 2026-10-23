@@ -18,6 +18,35 @@
 .access-footnote { margin: 22px 0 0; font-size: 10px; }
 .logout-button { border: 1px solid #dfe8de; border-radius: 6px; padding: 8px 11px; background: white; color: #52745c; font-size: 11px; cursor: pointer; }
 .logout-button:hover, .access-logout:hover { filter: brightness(.96); }
+.access-methods { display: grid; gap: 10px; margin-top: 25px; }
+.access-method { padding: 13px; border: 1px solid #dce6dc; border-radius: 7px; background: white; color: #2e6647; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.access-method:hover { background: #f3f6f1; }
+.access-method.primary { border-color: #2e6647; background: #2e6647; color: white; }
+.access-method.primary:hover { filter: brightness(.96); }
+.access-admin { max-width: 760px; padding-top: 25px; }
+.access-admin-description { margin: 0 0 18px; color: #819486; font-size: 12px; line-height: 1.8; }
+.access-admin h3 { margin: 0 0 12px; color: #214331; font-size: 15px; }
+.access-code-form { display: grid; gap: 11px; padding: 22px; background: white; border: 1px solid #e9eee8; border-radius: 12px; }
+.access-code-form > label { color: #546f5b; font-size: 12px; font-weight: 700; }
+.access-code-form > input { width: 100%; padding: 12px; border: 1px solid #dce6dc; border-radius: 7px; color: #294938; font: inherit; outline-color: #69957c; }
+.access-code-form > button { justify-self: start; padding: 12px 18px; border: 0; border-radius: 7px; background: #2e6647; color: white; font-size: 13px; font-weight: 700; cursor: pointer; }
+.access-code-form > button:disabled { cursor: not-allowed; opacity: .5; }
+.access-trip-picker { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.access-trip-picker legend { margin-bottom: 8px; color: #546f5b; font-size: 12px; font-weight: 700; }
+.access-trip-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 10px; padding: 11px 13px; border: 1px solid #e3eae2; border-radius: 8px; background: #fbfcfa; cursor: pointer; }
+.access-trip-option input { margin: 0; accent-color: #2e6647; }
+.access-trip-option span { color: #294938; font-size: 13px; font-weight: 700; }
+.access-trip-option small { grid-column: 2; color: #8da395; font-size: 11px; }
+.access-code-created { display: grid; gap: 10px; margin: 20px 0; padding: 18px; border: 1px solid #cfe0cf; border-radius: 12px; background: #eef6ee; color: #315b42; font-size: 13px; }
+.access-code-created code { padding: 12px; border-radius: 7px; background: white; color: #214331; font-size: 14px; overflow-wrap: anywhere; user-select: all; }
+.access-code-created .small-action { justify-self: start; }
+.access-code-list { display: grid; gap: 10px; margin-top: 28px; }
+.access-code-item { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid #e8ede6; border-radius: 10px; background: white; }
+.access-code-item strong, .access-code-item small { display: block; }
+.access-code-item strong { color: #254935; font-size: 14px; }
+.access-code-item small { margin-top: 5px; color: #9aaa9d; font-size: 11px; }
+.access-code-item p { margin: 0; color: #66806b; font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .access-code-item { grid-template-columns: 1fr; } }
 .notepad-readonly { min-height: 170px; padding: 16px; border: 1px solid #e5ebe3; border-radius: 8px; color: #52665a; font-size: 13px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .load-error { max-width: 620px; margin: 15vh auto; padding: 36px; background: white; border-radius: 12px; color: #a84639; }
 .app-shell { display: flex; min-height: 100vh; }

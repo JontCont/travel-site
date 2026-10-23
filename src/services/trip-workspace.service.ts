@@ -56,7 +56,13 @@ export async function loadTripWorkspace(
     await saveWorkspace(legacyWorkspace)
     return legacyWorkspace
   }
-  if (!response.ok) throw new Error(`讀取 SQLite 旅程資料失敗（HTTP ${response.status}）。`)
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null)
+    const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+      ? payload.error
+      : `讀取 SQLite 旅程資料失敗（HTTP ${response.status}）。`
+    throw new Error(message)
+  }
   const value: unknown = await response.json()
   if (!isTripWorkspaceDto(value)) throw new Error('SQLite 回傳的旅程資料格式不正確。')
   return value
