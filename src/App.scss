@@ -25,6 +25,9 @@
 .access-method.primary:hover { filter: brightness(.96); }
 .access-divider { display: flex; align-items: center; gap: 12px; color: #8da395; font-size: 11px; letter-spacing: .12em; }
 .access-divider::before, .access-divider::after { content: ""; flex: 1; height: 1px; background: #dce6dc; }
+.access-methods > form { margin: 0; }
+.access-methods > form > .access-method { padding: 13px; border: 1px solid #dce6dc; background: white; color: #2e6647; }
+.access-methods > form > .access-method:hover { background: #f3f6f1; }
 .access-admin { max-width: 760px; padding-top: 25px; }
 .access-admin-description { margin: 0 0 18px; color: #819486; font-size: 12px; line-height: 1.8; }
 .access-admin h3 { margin: 0 0 12px; color: #214331; font-size: 15px; }

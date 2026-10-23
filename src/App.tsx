@@ -66,7 +66,6 @@ type AccessGateProps = {
 }
 
 function AccessGate({ configured, error, busy, code, onCodeChange, onSubmit, onSynologyLogin }: AccessGateProps) {
-  const [codeOpen, setCodeOpen] = useState(false)
   return <main className="access-page">
     <section className="access-card">
       <div className="access-brand"><span className="brand-mark">✳</span><span>途間 <small>TRIP STUDIO</small></span></div>
@@ -74,26 +73,23 @@ function AccessGate({ configured, error, busy, code, onCodeChange, onSubmit, onS
       <h1>旅程只和同行的人分享。</h1>
       <p className="access-description">使用 Synology 帳號登入，或輸入管理員提供的訪客通行碼。NAS 管理員可以編輯旅程並發放通行碼。</p>
       {error && <p className="access-error" role="alert">{error}</p>}
-      {!configured ? <p className="access-setup">{error ? '目前無法確認 NAS 登入服務狀態，請檢查伺服器與反向代理設定。' : <>NAS 尚未設定 Synology 登入。請在 <code>.env</code> 設定 <code>TRIP_OIDC_*</code> 後重新啟動網站。</>}</p> : <>
-        <div className="access-methods">
-          <button type="button" className="access-method" aria-expanded={codeOpen} onClick={() => setCodeOpen((open) => !open)}>通行碼</button>
-          <div className="access-divider"><span>或</span></div>
-          <button type="button" className="access-method primary" onClick={onSynologyLogin}>Synology 登入</button>
-        </div>
-        {codeOpen && <form onSubmit={onSubmit}>
-          <label htmlFor="access-code">訪客通行碼</label>
-          <input
-            id="access-code"
-            type="password"
-            autoComplete="off"
-            required
-            value={code}
-            onChange={(event) => onCodeChange(event.target.value)}
-            placeholder="輸入通行碼"
-          />
-          <button type="submit" disabled={busy}>{busy ? '正在登入…' : '登入旅程'}</button>
-        </form>}
-      </>}
+      {!configured ? <p className="access-setup">{error ? '目前無法確認 NAS 登入服務狀態，請檢查伺服器與反向代理設定。' : <>NAS 尚未設定 Synology 登入。請在 <code>.env</code> 設定 <code>TRIP_OIDC_*</code> 後重新啟動網站。</>}</p>       : <div className="access-methods">
+             <form onSubmit={onSubmit}>
+               <label htmlFor="access-code">訪客通行碼</label>
+               <input
+                 id="access-code"
+                 type="password"
+                 autoComplete="off"
+                 required
+                 value={code}
+                 onChange={(event) => onCodeChange(event.target.value)}
+                 placeholder="輸入通行碼"
+               />
+               <button type="submit" className="access-method" disabled={busy}>{busy ? '正在登入…' : '通行碼'}</button>
+             </form>
+             <div className="access-divider"><span>或</span></div>
+             <button type="button" className="access-method primary" onClick={onSynologyLogin}>Synology 登入</button>
+           </div>}
       <p className="access-footnote">Synology 密碼只在 NAS 登入頁輸入，本站不會取得。通行碼只以雜湊形式保存在旅程資料庫，登入狀態以 HttpOnly Cookie 保存。</p>
     </section>
   </main>
