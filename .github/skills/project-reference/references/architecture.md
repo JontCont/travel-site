@@ -41,7 +41,7 @@ Every `/api/*` path except `/api/auth/*` must pass the session check before its 
 - The Synology login uses Authorization Code with PKCE (S256). The `state` is stored as a hash. The `nonce` and PKCE verifier are stored in `oidc_transactions` for 10 minutes. The ID token is verified with RS256 against the issuer's JWKS, checking `iss`, `aud`, `azp`, `exp`, `iat` (60 s skew), `nonce`, `sub`, and the username.
 - Session cookie `trip_session` is HttpOnly, SameSite=Strict, and Path=/. It is marked Secure when `TRIP_COOKIE_SECURE=1` or `NODE_ENV=production`. `server.mjs` sets `TRIP_COOKIE_SECURE=1` when the variable is unset. Browsers accept Secure cookies on `http://localhost`, but a plain-HTTP LAN address will not keep the cookie unless you set `TRIP_COOKIE_SECURE=0`.
 - Sessions last six calendar months. The `auth_sessions` table stores a SHA-256 hash of the token, the role (`admin`, `viewer`, or `code`), and the subject (the DSM username or the access code id). Code sessions re-check the access code on every request, and revoking a code deletes its sessions.
-- The rate limit uses the socket address. `X-Forwarded-For` is read only when `TRIP_TRUST_PROXY=1`.
+- The rate limit uses the socket address. With `TRIP_TRUST_PROXY=1`, it reads `CF-Connecting-IP` first, then the rightmost `X-Forwarded-For` entry.
 
 ## Storage
 
@@ -77,7 +77,7 @@ Every `/api/*` path except `/api/auth/*` must pass the session check before its 
 | `TRIP_DATABASE_PATH` | `openTripDatabase` | SQLite file path. |
 | `TRIP_HOST` | `server.mjs` | Bind address. Local default `127.0.0.1`. |
 | `PORT` | `server.mjs` | Listen port. Local default 4173. |
-| `TRIP_TRUST_PROXY` | `route-api.mjs` | `1` makes the rate limit read `X-Forwarded-For`. |
+| `TRIP_TRUST_PROXY` | `route-api.mjs` | `1` makes the rate limit read `CF-Connecting-IP`, then the rightmost `X-Forwarded-For`. |
 | `TRIP_COOKIE_SECURE` | `route-api.mjs` | `1` forces the Secure cookie flag. `server.mjs` defaults it to `1` when unset. |
 | `NODE_ENV` | `route-api.mjs` | `production` forces the Secure cookie flag. |
 | `AMAP_API_KEY` | `/api/map-config` | AMap JS key. Returned only to authenticated sessions. |

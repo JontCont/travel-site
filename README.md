@@ -59,7 +59,7 @@ docker compose down
 
 - Redirect URI 固定為 HTTPS 的旅程網域，因此無法用 `http://localhost` 或區網 IP（例如 `http://192.168.x.x:4187`）完成 Synology 登入。區網裝置可改用訪客通行碼。
 - 容器必須能連到 NAS 的 HTTPS 位址，才能完成 token 交換與身分驗證。若連不回 NAS 網域，請檢查 NAT 迴流設定。
-- 若透過反向代理接入，請在 `.env` 設定 `TRIP_TRUST_PROXY=1`，讓登入失敗次數限制以實際用戶端 IP 計算。
+- 若透過反向代理或 Cloudflare 接入（本站目前經 Cloudflare），請在 `.env` 設定 `TRIP_TRUST_PROXY=1`，讓登入失敗次數限制以實際用戶端 IP 計算。程式會優先讀取 `CF-Connecting-IP`，其次取 `X-Forwarded-For` 最右側的值。使用此設定時，容器的 4187 埠不可被外網直接連到。
 
 ## 資料庫結構
 

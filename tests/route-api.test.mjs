@@ -246,6 +246,25 @@ test('rate-limits repeated invalid access-code attempts', async () => {
   }
 })
 
+test('keys login rate limits by Cloudflare client IP when the proxy flag is set', async (t) => {
+  t.after(() => {
+    delete process.env.TRIP_TRUST_PROXY
+  })
+  process.env.TRIP_TRUST_PROXY = '1'
+  const database = new DatabaseSync(':memory:')
+  try {
+    const api = apiWith(database)
+    const attacker = { 'cf-connecting-ip': '203.0.113.7' }
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await requestApi(api, '/api/auth/login', 'POST', { code: 'invalid-access-code' }, { ...attacker, 'x-forwarded-for': `198.51.100.${attempt}` })
+    }
+    assert.equal((await requestApi(api, '/api/auth/login', 'POST', { code: 'invalid-access-code' }, { ...attacker, 'x-forwarded-for': '198.51.100.99' })).status, 429)
+    assert.equal((await requestApi(api, '/api/auth/login', 'POST', { code: 'invalid-access-code' }, { 'cf-connecting-ip': '203.0.113.8' })).status, 401)
+  } finally {
+    database.close()
+  }
+})
+
 test('viewer access can read but cannot write trip data', async (t) => {
   const provider = useMockOidc(t)
   const database = new DatabaseSync(':memory:')

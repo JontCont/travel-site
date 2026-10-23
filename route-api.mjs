@@ -155,8 +155,11 @@ export function createTripApi(database, options = {}) {
 
   function clientAddress(req) {
     if (process.env.TRIP_TRUST_PROXY === '1') {
+      // Cloudflare overwrites CF-Connecting-IP; the leftmost X-Forwarded-For entry can be client-supplied.
+      const cloudflareAddress = req.headers?.['cf-connecting-ip']
+      if (typeof cloudflareAddress === 'string' && cloudflareAddress.trim()) return cloudflareAddress.trim()
       const forwarded = req.headers?.['x-forwarded-for']
-      if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim()
+      if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',').at(-1).trim()
     }
     return req.socket?.remoteAddress ?? 'unknown'
   }
