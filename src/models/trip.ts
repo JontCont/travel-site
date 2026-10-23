@@ -51,6 +51,7 @@ export type Trip = {
   hotelFacilityGroups?: HotelFacilityGroup[]
   days: Record<string, Stop[]>
   photoShareUrl?: string
+  aiAskEnabled?: boolean
   travelers: Traveler[]
   outboundFlight?: Flight
   returnFlight?: Flight

@@ -154,6 +154,16 @@ test('accepts only https photo share URLs on a trip', () => {
   }
 })
 
+test('per-trip AI ask flag accepts only booleans when present', () => {
+  const trip = makeTrip({ aiAskEnabled: true })
+  assert.equal(isTripWorkspaceDto({ trips: [trip], activeTripId: trip.id }), true)
+  assert.equal(isTripWorkspaceDto({ trips: [makeTrip({ aiAskEnabled: false })], activeTripId: trip.id }), true)
+  assert.equal(isTripWorkspaceDto({ trips: [makeTrip()], activeTripId: trip.id }), true)
+  for (const aiAskEnabled of ['yes', 1, null]) {
+    assert.equal(isTripWorkspaceDto({ trips: [{ ...trip, aiAskEnabled }], activeTripId: trip.id }), false)
+  }
+})
+
 test('persists per-trip notepad text and validates its DTO type', () => {
   const trip = makeTrip({ notepad: '訂位代碼：ABC123\n集合地點待確認' })
   assert.equal(trip.notepad, '訂位代碼：ABC123\n集合地點待確認')

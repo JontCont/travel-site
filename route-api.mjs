@@ -13,6 +13,16 @@ import {
   readOidcConfig,
   resolveOidcIdentity,
 } from './oidc.mjs'
+import { decryptSecret, encryptSecret, readSecretKey } from './ai-crypto.mjs'
+import { parseAssistRequest, runAiAssist } from './ai-assistant.mjs'
+import {
+  AiInputError,
+  AiOutputError,
+  AiProviderError,
+  aiProviderOptions,
+  callAiProvider,
+  parseAiSettingsInput,
+} from './ai-providers.mjs'
 
 const coordinatePattern = /^-?\d{1,3}(?:\.\d{1,6})?,-?\d{1,2}(?:\.\d{1,6})?$/
 const defaultDatabasePath = fileURLToPath(new URL('./data/trips.sqlite', import.meta.url))
@@ -113,7 +123,7 @@ function addCalendarMonths(timestamp, months) {
 }
 
 /**
- * @param {{ oidc?: ReturnType<typeof readOidcConfig>, secureCookie?: boolean }} [options]
+ * @param {{ oidc?: ReturnType<typeof readOidcConfig>, secureCookie?: boolean, aiFetch?: typeof fetch }} [options]
  */
 export function createTripApi(database, options = {}) {
   database.exec('CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK (id = 1), data_json TEXT NOT NULL)')
@@ -132,6 +142,19 @@ export function createTripApi(database, options = {}) {
       nonce TEXT NOT NULL,
       code_verifier TEXT NOT NULL,
       expires_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS ai_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      provider TEXT NOT NULL,
+      base_url TEXT,
+      model TEXT NOT NULL,
+      api_key_encrypted TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS ai_secret (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      secret TEXT NOT NULL,
+      created_at TEXT NOT NULL
     );
   `)
   migrateAccessCodes(database)
@@ -155,12 +178,39 @@ export function createTripApi(database, options = {}) {
   const readOidcTransaction = database.prepare('SELECT nonce, code_verifier FROM oidc_transactions WHERE state_hash = ?')
   const deleteOidcTransaction = database.prepare('DELETE FROM oidc_transactions WHERE state_hash = ?')
   const deleteExpiredOidcTransactions = database.prepare('DELETE FROM oidc_transactions WHERE expires_at <= ?')
+  const readAiSettings = database.prepare('SELECT provider, base_url, model, api_key_encrypted, updated_at FROM ai_settings WHERE id = 1')
+  const readAiSecret = database.prepare('SELECT secret FROM ai_secret WHERE id = 1')
+  const insertAiSecret = database.prepare('INSERT OR IGNORE INTO ai_secret (id, secret, created_at) VALUES (1, ?, ?)')
+  const writeAiSettings = database.prepare(`
+    INSERT INTO ai_settings (id, provider, base_url, model, api_key_encrypted, updated_at) VALUES (1, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      provider = excluded.provider,
+      base_url = excluded.base_url,
+      model = excluded.model,
+      api_key_encrypted = excluded.api_key_encrypted,
+      updated_at = excluded.updated_at
+  `)
   const oidcConfig = options.oidc ?? readOidcConfig(process.env)
   const configured = oidcConfig.configured
   const secureCookie = options.secureCookie ?? (
     process.env.TRIP_COOKIE_SECURE === '1' || process.env.NODE_ENV === 'production'
   )
   const loginAttempts = new Map()
+  const aiFetch = options.aiFetch ?? fetch
+
+  /** 加密金鑰只存在 SQLite，首次需要加密時自動產生。 */
+  function readAiSecretKey() {
+    return readSecretKey(readAiSecret.get()?.secret)
+  }
+
+  function ensureAiSecretKey() {
+    const existing = readAiSecretKey()
+    if (existing) return existing
+    insertAiSecret.run(randomBytes(32).toString('base64url'), new Date().toISOString())
+    const secret = readAiSecretKey()
+    if (!secret) throw new Error('無法建立 AI 加密金鑰。')
+    return secret
+  }
 
   function resolveSession(req) {
     const token = getCookie(req, sessionCookie)
@@ -233,6 +283,150 @@ export function createTripApi(database, options = {}) {
     } catch {
       throw new Error('請求內容不是有效 JSON。')
     }
+  }
+
+  function aiSettingsSummary() {
+    const row = readAiSettings.get()
+    return {
+      settings: row ? {
+        provider: row.provider,
+        baseUrl: row.base_url,
+        model: row.model,
+        hasApiKey: Boolean(row.api_key_encrypted),
+        updatedAt: row.updated_at,
+      } : null,
+      ready: Boolean(row?.api_key_encrypted) && readAiSecretKey() !== null,
+      providers: aiProviderOptions(),
+    }
+  }
+
+  function loadAiRuntime() {
+    const row = readAiSettings.get()
+    const secret = readAiSecretKey()
+    if (!row?.api_key_encrypted || !secret) return { error: { status: 503, message: '尚未完成 AI 設定，請先儲存服務商、模型與 API Key。' } }
+    try {
+      return {
+        settings: { provider: row.provider, baseUrl: row.base_url, model: row.model },
+        apiKey: decryptSecret(row.api_key_encrypted, secret),
+      }
+    } catch {
+      return { error: { status: 500, message: '無法解密已儲存的 API Key，請重新輸入 API Key。' } }
+    }
+  }
+
+  function readWorkspaceTrip(tripId) {
+    const row = readWorkspace.get()
+    if (!row) return { error: { status: 404, message: 'SQLite 尚未建立旅程資料。' } }
+    let workspace
+    try {
+      workspace = JSON.parse(row.data_json)
+    } catch {
+      return { error: { status: 500, message: 'SQLite 旅程資料不是有效 JSON。' } }
+    }
+    if (!isTripWorkspaceDto(workspace)) return { error: { status: 500, message: 'SQLite 旅程資料格式不正確。' } }
+    const trip = workspace.trips.find((item) => item.id === tripId)
+    if (!trip) return { error: { status: 404, message: '找不到指定旅程。' } }
+    return { trip }
+  }
+
+  function readAssistTrip(session, tripId) {
+    if (Array.isArray(session.tripIds) && !session.tripIds.includes(tripId)) {
+      return { error: { status: 404, message: '找不到指定旅程。' } }
+    }
+    const found = readWorkspaceTrip(tripId)
+    if (found.error || session.role === 'admin') return found
+    if (found.trip.aiAskEnabled !== true) return { error: { status: 403, message: '管理員尚未開放此旅程的 AI 助理。' } }
+    return found
+  }
+
+  function replyAiError(reply, error) {
+    if (error instanceof AiInputError) return reply(400, { error: error.message })
+    if (error instanceof AiOutputError || error instanceof AiProviderError) return reply(502, { error: error.message })
+    return reply(500, { error: 'AI 處理失敗，請稍後再試。' })
+  }
+
+  async function saveAiSettings(req, reply) {
+    let input
+    try {
+      input = parseAiSettingsInput(await readJsonBody(req, 4 * 1024))
+    } catch (error) {
+      return reply(400, { error: error instanceof Error ? error.message : 'AI 設定格式不正確。' })
+    }
+    if (input.clearApiKey && input.apiKey) return reply(400, { error: '不能同時清除並更新 API Key。' })
+    const existing = readAiSettings.get()
+    let apiKeyEncrypted
+    if (input.clearApiKey) apiKeyEncrypted = null
+    else if (input.apiKey) apiKeyEncrypted = encryptSecret(input.apiKey, ensureAiSecretKey())
+    else if (existing?.api_key_encrypted && existing.provider === input.provider) apiKeyEncrypted = existing.api_key_encrypted
+    else return reply(400, { error: '請輸入此服務商的 API Key；切換服務商時必須重新輸入。' })
+    writeAiSettings.run(input.provider, input.baseUrl, input.model, apiKeyEncrypted, new Date().toISOString())
+    return reply(200, aiSettingsSummary())
+  }
+
+  async function handleAiRoute(path, req, reply, session) {
+    if (path === '/api/ai/availability') {
+      if (req.method !== 'GET') return reply(405, { error: '只支援 GET。' })
+      return reply(200, { ready: aiSettingsSummary().ready })
+    }
+
+    if (path === '/api/ai/settings') {
+      if (session.role !== 'admin') return reply(403, { error: '只有管理員可以設定 AI。' })
+      if (req.method === 'GET') return reply(200, aiSettingsSummary())
+      if (req.method === 'PUT') return saveAiSettings(req, reply)
+      return reply(405, { error: '只支援 GET 與 PUT。' })
+    }
+
+    if (path === '/api/ai/test') {
+      if (session.role !== 'admin') return reply(403, { error: '只有管理員可以設定 AI。' })
+      if (req.method !== 'POST') return reply(405, { error: '只支援 POST。' })
+      const runtime = loadAiRuntime()
+      if (runtime.error) return reply(runtime.error.status, { error: runtime.error.message })
+      try {
+        await callAiProvider({
+          ...runtime.settings,
+          apiKey: runtime.apiKey,
+          system: '你是連線測試程式，請只回覆 JSON 物件 {"ok": true}。',
+          user: 'ping',
+          fetchImpl: aiFetch,
+        })
+        return reply(200, { ok: true })
+      } catch (error) {
+        return replyAiError(reply, error)
+      }
+    }
+
+    if (path === '/api/ai/assist') {
+      if (req.method !== 'POST') return reply(405, { error: '只支援 POST。' })
+      let request
+      try {
+        request = parseAssistRequest(await readJsonBody(req, 16 * 1024))
+      } catch (error) {
+        return reply(400, { error: error instanceof Error ? error.message : 'AI 請求格式不正確。' })
+      }
+      if (session.role !== 'admin' && request.mode !== 'ask') return reply(403, { error: '此 AI 功能只限管理員使用。' })
+      const runtime = loadAiRuntime()
+      if (runtime.error) return reply(runtime.error.status, { error: runtime.error.message })
+      let trip
+      if (request.mode !== 'generate_itinerary') {
+        const found = readAssistTrip(session, request.tripId)
+        if (found.error) return reply(found.error.status, { error: found.error.message })
+        trip = found.trip
+      }
+      try {
+        const result = await runAiAssist({
+          settings: runtime.settings,
+          apiKey: runtime.apiKey,
+          request,
+          trip,
+          fetchImpl: aiFetch,
+        })
+        return reply(200, result)
+      } catch (error) {
+        return replyAiError(reply, error)
+      }
+    }
+
+    return reply(404, { error: '找不到指定的 AI API。' })
   }
 
   return async function tripApi(req, res, next) {
@@ -364,6 +558,7 @@ export function createTripApi(database, options = {}) {
     const session = resolveSession(req)
     if (!session) return reply(401, { error: '請先登入才能存取旅程資料。' })
     if (!configured) return reply(503, { error: 'NAS 尚未設定 Synology 登入。' })
+    if (path.startsWith('/api/ai/')) return handleAiRoute(path, req, reply, session)
     if (path === '/api/notepad') {
       if (req.method !== 'PUT') return reply(405, { error: '只支援 PUT。' })
 

@@ -4,7 +4,7 @@
 
 每日行程項目可展開查看營業時間與備註；管理員也可將入境、提領行李等非地點流程標記為不顯示於地圖。營業時間由管理員手動維護，只有填妥資訊來源與確認日期時才標示為已確認。
 
-住宿卡可檢視地址、電話、評分、參考價、資料來源與確認日期，以及按類別整理的飯店設施與服務；價格及設施資訊仍須以實際訂房頁面或飯店現場為準。登入方式有兩種：「Synology 登入」（DSM SSO，OAuth/OIDC）與「通行碼」。DSM 管理員可編輯完整旅程，並可產生訪客通行碼；其他 DSM 使用者為唯讀，可瀏覽全部旅程並編輯共用記事本；訪客通行碼同樣唯讀，只能瀏覽管理員指定的旅程。資料儲存在 SQLite 資料庫。
+住宿卡可檢視地址、電話、評分、參考價、資料來源與確認日期，以及按類別整理的飯店設施與服務；價格及設施資訊仍須以實際訂房頁面或飯店現場為準。登入方式有兩種：「Synology 登入」（DSM SSO，OAuth/OIDC）與「通行碼」。DSM 管理員可編輯完整旅程、產生訪客通行碼，並可使用 AI 助手（設定見「AI 助手」一節）；其他 DSM 使用者為唯讀，可瀏覽全部旅程並編輯共用記事本；訪客通行碼同樣唯讀，只能瀏覽管理員指定的旅程。管理員可在個別旅程開放 AI 詢問給一般使用者（僅能提問，不會修改行程）。資料儲存在 SQLite 資料庫。
 登入狀態最長有效六個月，服務重啟後仍有效；管理員撤銷訪客通行碼後，使用該通行碼的登入會立即失效。## 本機啟動
 
 需求：Node.js 24 與 npm。
@@ -62,9 +62,30 @@ docker compose down
 - 容器必須能連到 NAS 的 HTTPS 位址，才能完成 token 交換與身分驗證。若連不回 NAS 網域，請檢查 NAT 迴流設定。
 - 若透過反向代理或 Cloudflare 接入（本站目前經 Cloudflare），請在 `.env` 設定 `TRIP_TRUST_PROXY=1`，讓登入失敗次數限制以實際用戶端 IP 計算。程式會優先讀取 `CF-Connecting-IP`，其次取 `X-Forwarded-For` 最右側的值。使用此設定時，容器的 4187 埠不可被外網直接連到。
 
+## AI 助手
+
+管理員可在側邊欄「管理 → AI 設定」設定 AI 服務商。設定存在 SQLite，不需要 `.env`。尚未完成設定時，「AI 助手」按鈕不會顯示。
+
+- 服務商：OpenAI 相容 API（可自訂 Base URL，必須是 `https://`）、OpenRouter、Anthropic Claude、Google Gemini。模型名稱由管理員自行填入。
+- 功能（側邊欄「AI 助手」）：
+  - 生成行程：依目的地、日期與偏好建立新旅程，預覽並可修改標題後才會建立。
+  - 推薦當日景點：針對指定日期推薦景點，勾選後加入行程；加入後當日景點會依時間重新排序。
+  - 檢查衝突：列出行程中可能的時間或安排問題，只顯示結果，不會修改資料。
+  - 整理記事本：預覽後才會覆蓋記事本。
+- 一般使用者（DSM 一般使用者與訪客通行碼）：只能在管理員開放的旅程使用「詢問」，可針對行程與記事本提問，回答只顯示在畫面上，不會修改行程。管理員在各旅程的「設定」分頁勾選「開放 AI 助理詢問給一般使用者」即可開放，預設關閉。其餘三種功能僅限管理員使用。
+- AI 會參考 `.github/skills/` 內的 travel-plan-foundation、itinerary-timeline、walkable-map-routing、travel-record-writing、trip-photo-album 等 skill 作為指引。Docker 映像會包含這五個 `SKILL.md`。
+
+資料與金鑰：
+
+- **旅程資料會送到你選擇的服務商。** 每次 AI 請求都會送出該旅程的行程、記事本等內容。不會送出旅伴、班機、相簿連結與通行碼。請只選擇你信任的服務商。
+- API Key 以 AES-256-GCM 加密後存在 `ai_settings`。加密金鑰會在第一次儲存 AI 設定時自動產生，存在 `ai_secret` 表，與旅程資料位於同一個 `trips.sqlite`。因此備份 `trips.sqlite` 等同同時備份金鑰與加密後的 API Key，請把備份當作機密保存。
+- 變更服務商時必須重新輸入 API Key。同一服務商更新其他欄位時，留空 API Key 會沿用已儲存的金鑰。
+- 一般使用者的詢問同樣使用管理員設定的 API Key 並計入其費用，目前沒有每人次數限制。
+- OpenAI 相容服務的 Base URL 可指向任何 `https://` 位址，因此 AI 設定只開放給管理員。
+
 ## 資料庫結構
 
-資料庫檔案預設為 `data/trips.sqlite`，可用環境變數 `TRIP_DATABASE_PATH` 指定位置。啟動時會自動建立下列三張表（`CREATE TABLE IF NOT EXISTS`），不需要手動執行 migration。
+資料庫檔案預設為 `data/trips.sqlite`，可用環境變數 `TRIP_DATABASE_PATH` 指定位置。啟動時會自動建立下列資料表（`CREATE TABLE IF NOT EXISTS`），不需要手動執行 migration。
 
 ```sql
 -- 整個網站的旅程資料，只會有一列（id 固定為 1）
@@ -97,6 +118,23 @@ CREATE TABLE IF NOT EXISTS oidc_transactions (
   nonce TEXT NOT NULL,
   code_verifier TEXT NOT NULL,
   expires_at INTEGER NOT NULL
+);
+
+-- AI 服務商設定，只會有一列（id 固定為 1）；API Key 以 ai_secret 的金鑰加密後儲存
+CREATE TABLE IF NOT EXISTS ai_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  provider TEXT NOT NULL,
+  base_url TEXT,
+  model TEXT NOT NULL,
+  api_key_encrypted TEXT,
+  updated_at TEXT NOT NULL
+);
+
+-- AI API Key 的加密金鑰，只會有一列；第一次儲存 AI 設定時自動產生
+CREATE TABLE IF NOT EXISTS ai_secret (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  secret TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 ```
 

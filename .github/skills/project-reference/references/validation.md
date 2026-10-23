@@ -13,9 +13,10 @@
 | File | Covers |
 |---|---|
 | `tests/route-api.test.mjs` | Coordinate rejection, AMap duration and distance, missing duration, workspace persistence, invalid workspace rejection, fail-closed config, AMap key only when authenticated, place-search destination, rate limiting, viewer read-only, notepad endpoint, session requirement, six-month sessions and invalidation. |
-| `tests/trips.test.mjs` | Destination-local dates, trip status, sort order, stop time and duration validation, workspace DTO, hotel details, https photo URL, notepad DTO, opening hours, legacy migration, malformed backups. |
+| `tests/trips.test.mjs` | Destination-local dates, trip status, sort order, stop time and duration validation, workspace DTO, hotel details, https photo URL, per-trip AI ask flag type, notepad DTO, opening hours, legacy migration, malformed backups. |
 | `tests/map.test.mjs` | Google directions links, China trips use AMap for place search and do not use Google links. |
 | `tests/walking.test.mjs` | `evaluateWalk` per-leg and daily limits. An incomplete route is never compliant. |
+| `tests/ai.test.mjs` | AES-GCM key handling, provider URL and auth rules, redirect and error handling, whitelisted skill loading, assist request limits, generated trip and conflict normalization, admin-only AI settings, key never returned, AI readiness, key sent only to the configured provider, provider-error status mapping, ask request and answer rules, and per-trip ask access for viewers and guest codes (including trip scope). |
 
 ## Known gaps
 

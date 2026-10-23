@@ -93,6 +93,7 @@ export function isTripDto(value: unknown): value is TripDto {
     })) return false
   if (value.hotelCoordinates !== undefined && typeof value.hotelCoordinates !== 'string') return false
   if (value.photoShareUrl !== undefined && !isHttpsUrl(value.photoShareUrl)) return false
+  if (value.aiAskEnabled !== undefined && typeof value.aiAskEnabled !== 'boolean') return false
   if (value.hotelDetails !== undefined && !isHotelDetails(value.hotelDetails)) return false
   if (value.hotelFacilityGroups !== undefined &&
     (!Array.isArray(value.hotelFacilityGroups) || !value.hotelFacilityGroups.every(isHotelFacilityGroup))) return false

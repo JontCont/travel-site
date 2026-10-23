@@ -17,7 +17,7 @@ Shared facts for the travel-site app. Other travel skills link here instead of r
 - Stack: Vite, React, and TypeScript client in `src/`. Node server (`server.mjs` with `route-api.mjs`) using the built-in `node:sqlite` module.
 - `server.mjs` refuses to start unless `dist/index.html` exists, so run `npm run build` first.
 - The whole trip workspace is one JSON document stored in one SQLite row.
-- Access uses two shared codes, not user accounts: a viewer code (read-only) and an admin code (read and write).
+- Access uses Synology SSO (DSM roles `admin` and `viewer`) plus guest access codes (read-only, limited to the trips an admin picks). There are no shared admin or viewer codes.
 
 ## Secrets
 

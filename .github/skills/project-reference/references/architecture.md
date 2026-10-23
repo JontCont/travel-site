@@ -7,6 +7,7 @@
 | `server.mjs` | HTTP server. Mounts the trip API, then the walk API, then static files from `dist/`. Sets `TRIP_COOKIE_SECURE=1` when the variable is unset. |
 | `route-api.mjs` | `createTripApi` (auth, workspace, notepad, map config, access codes) and `walkApi` (`POST /api/walk`). Exports `openTripDatabase`. |
 | `oidc.mjs` | Synology SSO (OIDC) client: config, discovery, PKCE, ID token verification, role mapping. Imported by `route-api.mjs`, so it must be in the Dockerfile COPY list. |
+| `ai-providers.mjs`, `ai-assistant.mjs`, `ai-skills.mjs`, `ai-crypto.mjs` | AI assistant and admin settings (provider catalog and HTTP adapters, trip prompts and result validation, the whitelisted skill loader, and AES-256-GCM helpers for the stored API key). Non-admin users may use only `ask` on trips with `aiAskEnabled`. Imported by `route-api.mjs`. `ai-assistant.mjs` also imports `src/services/trip.service.ts` and `date.service.ts`. All of them must be in the Dockerfile COPY list. |
 | `src/dto/trip-workspace.dto.ts` | Type guards for the workspace. Used by the client and the server. |
 | `src/models/` | Types for trips, stops, and walking legs. |
 | `src/services/` | Client services: auth, workspace load and save, map links, walking evaluation, dates. |
@@ -26,6 +27,11 @@
 | `POST /api/access-codes` | Admin | Body `{label, tripIds, expiresInDays?}`: label 1–60 characters, 1–100 known trips. `expiresInDays` is 7, 30, 90, or `null` (permanent, the default when omitted). 201 `{code, access}`. The code is shown once. |
 | `PATCH /api/access-codes/:id` | Admin | Body with `tripIds` and/or `expiresInDays` (at least one). Changing trips takes effect on the guest's next request. Setting an expiry restarts the countdown from now. 400 for invalid values, 404 when missing. |
 | `DELETE /api/access-codes/:id` | Admin | Revokes the code and deletes its sessions. 404 when missing. |
+| `GET /api/ai/availability` | Any session | Returns `{ready}` with the same meaning as the admin settings `ready`. Lets non-admin users see the AI button only when the assistant is usable. 401 without a session. |
+| `GET /api/ai/settings` | Admin | Returns `{settings, ready, providers}`. `settings` is `null` until saved, otherwise `{provider, baseUrl, model, hasApiKey, updatedAt}`. Never returns the API key. `ready` is true only when a key is stored and the encryption key exists. 403 for other roles. |
+| `PUT /api/ai/settings` | Admin | Body `{provider, model, baseUrl?, apiKey?, clearApiKey?}`, max 4 KB (400 when larger). `baseUrl` applies only to `openai_compatible` and must be `https://` with no credentials, query, or hash. An unchanged provider keeps the stored key when `apiKey` is empty. Changing provider requires a new `apiKey` (400). The encryption key is generated on first save. Returns the summary. |
+| `POST /api/ai/test` | Admin | Sends a short ping to the saved provider and returns `{ok: true}`. 503 until settings and a key are saved. 502 for a provider error. |
+| `POST /api/ai/assist` | Admin; any session for `mode: ask` when the trip has `aiAskEnabled: true` | Body `{mode, ...}`, max 16 KB (400 when larger). Non-admin sessions may send only `ask` (403 otherwise). `generate_itinerary` takes `destination`, `startDate`, `endDate`, `timeZone`, and optional `preferences`. `suggest_day_stops` takes `tripId`, `date`, and optional `preferences`. `check_conflicts`, `tidy_notepad`, and `ask` take `tripId`; `ask` also takes `question` (1–1000 characters). Returns `{mode, trip}`, `{mode, stops}`, `{mode, issues}`, `{mode, notepad}`, or `{mode, answer}` (answer up to 4000 characters; `ask` writes nothing and the client has no apply action for it). `aiAskEnabled` is a per-trip flag, default off, saved by the admin through `PUT /api/workspace`; it gates only `ask` for non-admin sessions. Nothing is saved on the server; the client saves through `PUT /api/workspace` or `PUT /api/notepad`. 400 for invalid input, 403 for a trip not open to non-admins, 404 for a missing trip or one outside a code session's trips, 502 for a provider error or invalid output, 503 when not configured. |
 | `GET /api/map-config` | Any session | Returns `AMAP_API_KEY` (the JS key). 401 without a session. |
 | `GET /api/workspace` | Any session | Returns the workspace. Code sessions get only their assigned trips, and 403 when none are assigned. 401 without a session. 503 when SSO is not configured. |
 | `PUT /api/workspace` | Admin | Replaces the whole workspace. Max 10 MB (413). Non-admin sessions get 403. Invalid data gets 400 and the stored row is unchanged. |
@@ -49,6 +55,7 @@ Every `/api/*` path except `/api/auth/*` must pass the session check before its 
 - `node:sqlite` `DatabaseSync` at `TRIP_DATABASE_PATH`. The default is `./data/trips.sqlite`. Docker uses `/data/trips.sqlite`.
 - Table `workspace (id INTEGER PRIMARY KEY CHECK (id = 1), data_json TEXT)` holds one row.
 - Auth tables are `auth_sessions`, `access_codes`, and `oidc_transactions`. Upgrading from the code-based login drops the old `auth_sessions` table (the one with `credential_hash`), so existing logins end once.
+- AI tables are `ai_settings` (one row: provider, base URL, model, and the AES-256-GCM encrypted API key) and `ai_secret` (one row: the key that encrypts the API key, generated on the first save). A backup of `trips.sqlite` contains both.
 - There is no migration framework. A stricter DTO can make `GET /api/workspace` fail with 500 on rows written earlier.
 - The client reads the localStorage key `travel-planner-v1` only for one-time migration: when SQLite returns 404 and the user is admin.
 
@@ -58,7 +65,8 @@ Every `/api/*` path except `/api/auth/*` must pass the session check before its 
 - Multi-stage build on `node:24-alpine`.
 - Runtime ENV: `PORT=4187`, `TRIP_HOST=0.0.0.0`, `TRIP_DATABASE_PATH=/data/trips.sqlite`, `TRIP_COOKIE_SECURE=1`.
 - Runs as `USER node`. The healthcheck calls `/api/auth/status`. CMD is `node server.mjs`.
-- Runtime COPY list: `dist`, `package.json`, `route-api.mjs`, `oidc.mjs`, `server.mjs`, `src/dto/trip-workspace.dto.ts`, and `src/services/date.service.ts`. Any new runtime import of a repo file (root `.mjs` or `src/`) must be added here.
+- Runtime COPY list: `dist`, `package.json`, `route-api.mjs`, `oidc.mjs`, `server.mjs`, `ai-crypto.mjs`, `ai-skills.mjs`, `ai-providers.mjs`, `ai-assistant.mjs`, `src/dto/trip-workspace.dto.ts`, `src/services/date.service.ts`, `src/services/trip.service.ts`, and the five `.github/skills/<name>/SKILL.md` files that `ai-skills.mjs` allows. Any new runtime import of a repo file (root `.mjs` or `src/`) must be added here.
+- AI settings have no environment variables. They live in SQLite.
 
 `docker-compose.yml`:
 - Image from `TRIP_IMAGE`, published to GHCR by `.github/workflows/publish-image.yml`.
