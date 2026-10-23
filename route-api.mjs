@@ -21,6 +21,9 @@ const sessionDurationMonths = 6
 const oidcTransactionMinutes = 10
 const accessCodeTripLimit = 100
 const accessCodeLabelLimit = 60
+const accessCodeExpiryDays = [7, 30, 90]
+const accessCodeExpiryError = `到期時間只能是 ${accessCodeExpiryDays.join('、')} 天或永久。`
+const dayMilliseconds = 24 * 60 * 60 * 1000
 const loginCompleteHtml = '<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="refresh" content="0;url=/"><title>登入完成</title></head><body><p>登入完成，正在返回旅程網站。</p></body></html>'
 
 export function openTripDatabase(databasePath = process.env.TRIP_DATABASE_PATH ?? defaultDatabasePath) {
@@ -55,8 +58,39 @@ function migrateAuthSessions(database) {
   `)
 }
 
+function migrateAccessCodes(database) {
+  const columns = database.prepare('PRAGMA table_info(access_codes)').all()
+  if (!columns.some((column) => column.name === 'expires_at')) database.exec('ALTER TABLE access_codes ADD COLUMN expires_at INTEGER')
+}
+
 function accessCodeSummary(row) {
-  return { id: row.id, label: row.label, tripIds: JSON.parse(row.trip_ids_json), createdAt: row.created_at }
+  return {
+    id: row.id,
+    label: row.label,
+    tripIds: JSON.parse(row.trip_ids_json),
+    createdAt: row.created_at,
+    expiresAt: row.expires_at === null ? null : new Date(row.expires_at).toISOString(),
+  }
+}
+
+function isAccessCodeExpired(row, now = Date.now()) {
+  return row.expires_at !== null && row.expires_at <= now
+}
+
+function isAccessCodeExpiry(value) {
+  return value === null || accessCodeExpiryDays.includes(value)
+}
+
+function accessCodeExpiresAt(expiresInDays) {
+  return expiresInDays === null ? null : Date.now() + expiresInDays * dayMilliseconds
+}
+
+function parseTripIds(value) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > accessCodeTripLimit ||
+    !value.every((tripId) => typeof tripId === 'string' && tripId)) {
+    return null
+  }
+  return [...new Set(value)]
 }
 
 function oidcErrorCode(error) {
@@ -90,7 +124,8 @@ export function createTripApi(database, options = {}) {
       label TEXT NOT NULL,
       code_hash TEXT NOT NULL UNIQUE,
       trip_ids_json TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      expires_at INTEGER
     );
     CREATE TABLE IF NOT EXISTS oidc_transactions (
       state_hash TEXT PRIMARY KEY,
@@ -99,6 +134,7 @@ export function createTripApi(database, options = {}) {
       expires_at INTEGER NOT NULL
     );
   `)
+  migrateAccessCodes(database)
   const readWorkspace = database.prepare('SELECT data_json FROM workspace WHERE id = 1')
   const writeWorkspace = database.prepare(`
     INSERT INTO workspace (id, data_json) VALUES (1, ?)
@@ -109,10 +145,11 @@ export function createTripApi(database, options = {}) {
   const deleteSession = database.prepare('DELETE FROM auth_sessions WHERE token_hash = ?')
   const deleteSessionsBySubject = database.prepare("DELETE FROM auth_sessions WHERE role = 'code' AND subject = ?")
   const deleteExpiredSessions = database.prepare('DELETE FROM auth_sessions WHERE expires_at <= ?')
-  const readAccessCodeByHash = database.prepare('SELECT id, label, trip_ids_json, created_at FROM access_codes WHERE code_hash = ?')
-  const readAccessCodeById = database.prepare('SELECT id, label, trip_ids_json, created_at FROM access_codes WHERE id = ?')
-  const listAccessCodes = database.prepare('SELECT id, label, trip_ids_json, created_at FROM access_codes ORDER BY created_at, id')
-  const insertAccessCode = database.prepare('INSERT INTO access_codes (id, label, code_hash, trip_ids_json, created_at) VALUES (?, ?, ?, ?, ?)')
+  const readAccessCodeByHash = database.prepare('SELECT id, label, trip_ids_json, created_at, expires_at FROM access_codes WHERE code_hash = ?')
+  const readAccessCodeById = database.prepare('SELECT id, label, trip_ids_json, created_at, expires_at FROM access_codes WHERE id = ?')
+  const listAccessCodes = database.prepare('SELECT id, label, trip_ids_json, created_at, expires_at FROM access_codes ORDER BY created_at, id')
+  const insertAccessCode = database.prepare('INSERT INTO access_codes (id, label, code_hash, trip_ids_json, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
+  const updateAccessCode = database.prepare('UPDATE access_codes SET trip_ids_json = ?, expires_at = ? WHERE id = ?')
   const deleteAccessCode = database.prepare('DELETE FROM access_codes WHERE id = ?')
   const writeOidcTransaction = database.prepare('INSERT INTO oidc_transactions (state_hash, nonce, code_verifier, expires_at) VALUES (?, ?, ?, ?)')
   const readOidcTransaction = database.prepare('SELECT nonce, code_verifier FROM oidc_transactions WHERE state_hash = ?')
@@ -141,6 +178,10 @@ export function createTripApi(database, options = {}) {
       deleteSession.run(tokenHash)
       return null
     }
+    if (isAccessCodeExpired(codeRow)) {
+      deleteSessionsBySubject.run(codeRow.id)
+      return null
+    }
     return { role: 'code', tripIds: JSON.parse(codeRow.trip_ids_json) }
   }
 
@@ -166,6 +207,19 @@ export function createTripApi(database, options = {}) {
 
   function cookieValue(token, maxAge) {
     return `${sessionCookie}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secureCookie ? '; Secure' : ''}`
+  }
+
+  function readKnownTripIds() {
+    const row = readWorkspace.get()
+    if (!row) return { error: { status: 404, message: 'SQLite 尚未建立旅程資料。' } }
+    let workspace
+    try {
+      workspace = JSON.parse(row.data_json)
+    } catch {
+      return { error: { status: 500, message: 'SQLite 旅程資料不是有效 JSON。' } }
+    }
+    if (!isTripWorkspaceDto(workspace)) return { error: { status: 500, message: 'SQLite 旅程資料格式不正確。' } }
+    return { tripIds: new Set(workspace.trips.map((trip) => trip.id)) }
   }
 
   async function readJsonBody(req, limit) {
@@ -235,6 +289,11 @@ export function createTripApi(database, options = {}) {
           ...(failedCount >= 5 ? { blockedUntil: now + 15 * 60 * 1000 } : {}),
         })
         return reply(401, { error: '通行碼不正確。' })
+      }
+
+      if (isAccessCodeExpired(codeRow)) {
+        deleteSessionsBySubject.run(codeRow.id)
+        return reply(403, { error: '通行碼已到期，請向管理員索取新的通行碼。' })
       }
 
       loginAttempts.delete(address)
@@ -374,37 +433,65 @@ export function createTripApi(database, options = {}) {
       if (!label || label.length > accessCodeLabelLimit) {
         return reply(400, { error: `通行碼名稱需為 1 到 ${accessCodeLabelLimit} 個字。` })
       }
-      if (!Array.isArray(body?.tripIds) || body.tripIds.length === 0 || body.tripIds.length > accessCodeTripLimit ||
-        !body.tripIds.every((tripId) => typeof tripId === 'string' && tripId)) {
-        return reply(400, { error: `請指定 1 到 ${accessCodeTripLimit} 個旅程。` })
-      }
-      const tripIds = [...new Set(body.tripIds)]
+      const tripIds = parseTripIds(body?.tripIds)
+      if (!tripIds) return reply(400, { error: `請指定 1 到 ${accessCodeTripLimit} 個旅程。` })
+      const expiresInDays = body?.expiresInDays ?? null
+      if (!isAccessCodeExpiry(expiresInDays)) return reply(400, { error: accessCodeExpiryError })
 
-      const row = readWorkspace.get()
-      if (!row) return reply(404, { error: 'SQLite 尚未建立旅程資料。' })
-      let workspace
-      try {
-        workspace = JSON.parse(row.data_json)
-      } catch {
-        return reply(500, { error: 'SQLite 旅程資料不是有效 JSON。' })
-      }
-      if (!isTripWorkspaceDto(workspace)) return reply(500, { error: 'SQLite 旅程資料格式不正確。' })
-      const knownTripIds = new Set(workspace.trips.map((trip) => trip.id))
-      if (!tripIds.every((tripId) => knownTripIds.has(tripId))) return reply(400, { error: '指定的旅程不存在。' })
+      const known = readKnownTripIds()
+      if (known.error) return reply(known.error.status, { error: known.error.message })
+      if (!tripIds.every((tripId) => known.tripIds.has(tripId))) return reply(400, { error: '指定的旅程不存在。' })
 
       const code = randomBytes(18).toString('base64url')
-      const access = { id: randomUUID(), label, trip_ids_json: JSON.stringify(tripIds), created_at: new Date().toISOString() }
-      insertAccessCode.run(access.id, access.label, sha256Hex(code), access.trip_ids_json, access.created_at)
+      const access = {
+        id: randomUUID(),
+        label,
+        trip_ids_json: JSON.stringify(tripIds),
+        created_at: new Date().toISOString(),
+        expires_at: accessCodeExpiresAt(expiresInDays),
+      }
+      insertAccessCode.run(access.id, access.label, sha256Hex(code), access.trip_ids_json, access.created_at, access.expires_at)
       return reply(201, { code, access: accessCodeSummary(access) })
     }
 
     const accessCodeId = path.match(/^\/api\/access-codes\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/)?.[1]
     if (accessCodeId) {
       if (session.role !== 'admin') return reply(403, { error: '只有管理員可以管理通行碼。' })
-      if (req.method !== 'DELETE') return reply(405, { error: '只支援 DELETE。' })
-      if (deleteAccessCode.run(accessCodeId).changes === 0) return reply(404, { error: '找不到指定通行碼。' })
-      deleteSessionsBySubject.run(accessCodeId)
-      return reply(200, { deleted: true })
+      if (req.method === 'DELETE') {
+        if (deleteAccessCode.run(accessCodeId).changes === 0) return reply(404, { error: '找不到指定通行碼。' })
+        deleteSessionsBySubject.run(accessCodeId)
+        return reply(200, { deleted: true })
+      }
+      if (req.method !== 'PATCH') return reply(405, { error: '只支援 PATCH 與 DELETE。' })
+
+      let body
+      try {
+        body = await readJsonBody(req, 16 * 1024)
+      } catch (error) {
+        return reply(400, { error: error instanceof Error ? error.message : '讀取通行碼請求失敗。' })
+      }
+      const changes = typeof body === 'object' && body !== null && !Array.isArray(body) ? body : {}
+      const hasTripIds = 'tripIds' in changes
+      const hasExpiry = 'expiresInDays' in changes
+      if (!hasTripIds && !hasExpiry) return reply(400, { error: '請指定要更新的旅程或到期時間。' })
+
+      const existing = readAccessCodeById.get(accessCodeId)
+      if (!existing) return reply(404, { error: '找不到指定通行碼。' })
+
+      let tripIdsJson = existing.trip_ids_json
+      if (hasTripIds) {
+        const tripIds = parseTripIds(changes.tripIds)
+        if (!tripIds) return reply(400, { error: `請指定 1 到 ${accessCodeTripLimit} 個旅程。` })
+        const known = readKnownTripIds()
+        if (known.error) return reply(known.error.status, { error: known.error.message })
+        if (!tripIds.every((tripId) => known.tripIds.has(tripId))) return reply(400, { error: '指定的旅程不存在。' })
+        tripIdsJson = JSON.stringify(tripIds)
+      }
+      if (hasExpiry && !isAccessCodeExpiry(changes.expiresInDays)) return reply(400, { error: accessCodeExpiryError })
+
+      const expiresAt = hasExpiry ? accessCodeExpiresAt(changes.expiresInDays) : existing.expires_at
+      updateAccessCode.run(tripIdsJson, expiresAt, accessCodeId)
+      return reply(200, { access: accessCodeSummary(readAccessCodeById.get(accessCodeId)) })
     }
 
     if (path !== '/api/workspace') return next()

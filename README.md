@@ -53,7 +53,8 @@ docker compose down
 
 - 屬於 `TRIP_OIDC_ADMIN_GROUP`（預設 `administrators`）或列在 `TRIP_OIDC_ADMIN_USERS`（逗號分隔）的 DSM 使用者為管理員。
 - 其他 DSM 使用者為唯讀（NAS 使用者）。
-- 管理員可在「管理 → 訪客通行碼」產生通行碼並指定可瀏覽的旅程。通行碼只顯示一次，之後無法再取得原文；遺失時請撤銷後重新產生。
+- 管理員可在「管理 → 訪客通行碼」產生通行碼並指定可瀏覽的旅程，同時選擇到期時間（7、30、90 天或永久）。通行碼只顯示一次，之後無法再取得原文；遺失時請撤銷後重新產生。
+- 已產生的通行碼可以編輯可瀏覽的旅程與到期時間，變更立即生效，不需要重新產生通行碼。通行碼到期後，該碼的登入會立即失效；管理員可再編輯到期時間讓它重新生效，但訪客需要重新登入。
 
 使用限制：
 
@@ -80,13 +81,14 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   expires_at INTEGER NOT NULL
 );
 
--- 訪客通行碼，只存 SHA-256 雜湊值，原文只在建立時顯示一次
+-- 訪客通行碼，只存 SHA-256 雜湊值，原文只在建立時顯示一次；expires_at 為毫秒時間戳，NULL 表示永久
 CREATE TABLE IF NOT EXISTS access_codes (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
   code_hash TEXT NOT NULL UNIQUE,
   trip_ids_json TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  expires_at INTEGER
 );
 
 -- Synology 登入進行中的交易（state、nonce、PKCE verifier），十分鐘內有效
@@ -103,9 +105,9 @@ CREATE TABLE IF NOT EXISTS oidc_transactions (
 - 設計初衷：旅程資料主要由 agent 讀寫，而不是靠使用者一筆一筆在畫面上操作。因此 `workspace.data_json` 採用整包 JSON，讓 agent 能一次讀取完整旅程、修改後整包寫回，不需要理解多張表之間的關聯，也不需要為每次結構改動撰寫 migration。
 - 網頁介面是給人檢視與少量編輯用的；資料的結構以 `src/` 內的型別定義為準。
 - `auth_sessions.role` 為 `admin`（DSM 管理員）、`viewer`（其他 DSM 使用者，唯讀）或 `code`（訪客通行碼）。`subject` 為 DSM 帳號或通行碼 id。
-- `code` session 每次請求都會重新檢查通行碼是否仍存在；管理員撤銷通行碼時，會刪除該通行碼的所有 session。
+- `code` session 每次請求都會重新檢查通行碼是否仍存在且未到期；管理員撤銷通行碼，或通行碼到期時，會刪除該通行碼的所有 session。到期的通行碼登入會回傳 403，且不計入登入失敗次數。
 - `expires_at` 為毫秒時間戳，session 有效期為六個月；登入時會順便清除已過期的 session 與 OIDC 交易。
-- 升級注意：舊版 `auth_sessions` 含有 `credential_hash` 欄位，首次啟動新版時會刪除該表，既有登入會失效，需要重新登入一次。`TRIP_VIEW_CODE` 與 `TRIP_ADMIN_CODE` 已不再使用，可從 `.env` 移除。
+- 升級注意：舊版 `auth_sessions` 含有 `credential_hash` 欄位，首次啟動新版時會刪除該表，既有登入會失效，需要重新登入一次。既有的 `access_codes` 會自動新增 `expires_at` 欄位，原有通行碼維持永久有效。`TRIP_VIEW_CODE` 與 `TRIP_ADMIN_CODE` 已不再使用，可從 `.env` 移除。
 
 備份時直接複製 `trips.sqlite` 即可。若服務在執行中，建議先停止容器再複製，避免讀到寫到一半的檔案。
 

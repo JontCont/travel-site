@@ -13,7 +13,10 @@ import {
   readAuthErrorFromUrl,
   revokeAccessCode,
   startSynologyLogin,
+  updateAccessCode,
+  type AccessCodeExpiryDays,
   type AccessCodeSummary,
+  type AccessCodeUpdate,
   type AccessRole,
 } from './services/auth.service'
 import { buildGoogleDirectionsUrl, buildTripMapSearchUrl, getMapApiKey, isChinaTrip, routeModeLabels, type RouteMode } from './services/map.service'
@@ -162,6 +165,32 @@ type AccessCodePanelProps = {
   trips: Trip[]
 }
 
+type AccessExpiryOption = { value: string; label: string; days: AccessCodeExpiryDays }
+
+const accessExpiryOptions: AccessExpiryOption[] = [
+  { value: '7', label: '7 天', days: 7 },
+  { value: '30', label: '30 天', days: 30 },
+  { value: '90', label: '90 天', days: 90 },
+  { value: 'permanent', label: '永久', days: null },
+]
+
+function expiryDaysFor(value: string): AccessCodeExpiryDays {
+  return accessExpiryOptions.find((option) => option.value === value)?.days ?? null
+}
+
+function describeExpiry(expiresAt: string | null): { text: string; expired: boolean } {
+  if (!expiresAt) return { text: '永久有效', expired: false }
+  const expiry = new Date(expiresAt)
+  const dateText = expiry.toLocaleDateString('zh-TW')
+  return expiry.getTime() <= Date.now()
+    ? { text: `${dateText} 已到期`, expired: true }
+    : { text: `${dateText} 到期`, expired: false }
+}
+
+function sameTripIds(left: string[], right: string[]) {
+  return left.length === right.length && left.every((id) => right.includes(id))
+}
+
 function AccessCodePanel({ trips }: AccessCodePanelProps) {
   const [codes, setCodes] = useState<AccessCodeSummary[]>([])
   const [loadingCodes, setLoadingCodes] = useState(true)
@@ -174,6 +203,12 @@ function AccessCodePanel({ trips }: AccessCodePanelProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [revokeError, setRevokeError] = useState('')
+  const [createExpiry, setCreateExpiry] = useState('30')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTripIds, setEditTripIds] = useState<string[]>([])
+  const [editExpiry, setEditExpiry] = useState('unchanged')
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [editError, setEditError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -202,7 +237,7 @@ function AccessCodePanel({ trips }: AccessCodePanelProps) {
     setCreateError('')
     setCopyStatus('idle')
     try {
-      const created = await createAccessCode(trimmed, selectedTripIds)
+      const created = await createAccessCode(trimmed, selectedTripIds, expiryDaysFor(createExpiry))
       setCodes((current) => [created.access, ...current])
       setCreatedCode({ label: created.access.label, code: created.code })
       setLabel('')
@@ -242,6 +277,45 @@ function AccessCodePanel({ trips }: AccessCodePanelProps) {
     }
   }
 
+  function toggleEditTrip(tripId: string) {
+    setEditTripIds((current) => current.includes(tripId)
+      ? current.filter((id) => id !== tripId)
+      : [...current, tripId])
+  }
+
+  function startEdit(item: AccessCodeSummary) {
+    setEditingId(item.id)
+    setEditTripIds(item.tripIds.filter((tripId) => trips.some((trip) => trip.id === tripId)))
+    setEditExpiry('unchanged')
+    setEditError('')
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditError('')
+  }
+
+  async function saveEdit(item: AccessCodeSummary) {
+    const update: AccessCodeUpdate = {}
+    if (!sameTripIds(editTripIds, item.tripIds)) update.tripIds = editTripIds
+    if (editExpiry !== 'unchanged') update.expiresInDays = expiryDaysFor(editExpiry)
+    if (Object.keys(update).length === 0) {
+      cancelEdit()
+      return
+    }
+    setSavingId(item.id)
+    setEditError('')
+    try {
+      const updated = await updateAccessCode(item.id, update)
+      setCodes((current) => current.map((code) => code.id === item.id ? updated : code))
+      setEditingId(null)
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : '更新通行碼失敗。')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
   const copyLabel = copyStatus === 'copied' ? '已複製' : copyStatus === 'failed' ? '複製失敗' : '複製'
 
   return <section className="access-admin">
@@ -259,6 +333,10 @@ function AccessCodePanel({ trips }: AccessCodePanelProps) {
         onChange={(event) => setLabel(event.target.value)}
         placeholder="例如：家人、同行朋友"
       />
+      <label htmlFor="access-code-expiry">到期時間</label>
+      <select id="access-code-expiry" value={createExpiry} onChange={(event) => setCreateExpiry(event.target.value)}>
+        {accessExpiryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
       <fieldset className="access-trip-picker">
         <legend>可查看的旅程</legend>
         {trips.length ? trips.map((item) => <label key={item.id} className="access-trip-option">
@@ -283,14 +361,40 @@ function AccessCodePanel({ trips }: AccessCodePanelProps) {
       {revokeError && <p className="notice danger" role="alert">{revokeError}</p>}
       {loadingCodes && !listError && <p className="access-admin-description">正在讀取通行碼…</p>}
       {!loadingCodes && !listError && !codes.length && <div className="empty"><span>◈</span><strong>尚未發放任何訪客通行碼</strong></div>}
-      {codes.map((item) => <article className="access-code-item" key={item.id}>
-        <div>
-          <strong>{item.label}</strong>
-          <small>{new Date(item.createdAt).toLocaleDateString('zh-TW')} 建立</small>
-        </div>
-        <p>{item.tripIds.length ? item.tripIds.map(tripTitle).join('、') : '未指派旅程'}</p>
-        <button type="button" className="small-action" disabled={revokingId === item.id} onClick={() => void revoke(item)}>{revokingId === item.id ? '撤銷中…' : '撤銷'}</button>
-      </article>)}
+      {codes.map((item) => {
+        const expiry = describeExpiry(item.expiresAt)
+        const isEditing = editingId === item.id
+        const isSaving = savingId === item.id
+        return <article className={`access-code-item${expiry.expired ? ' is-expired' : ''}`} key={item.id}>
+          <div>
+            <strong>{item.label}</strong>
+            <small>{new Date(item.createdAt).toLocaleDateString('zh-TW')} 建立 · {expiry.text}</small>
+          </div>
+          <p>{item.tripIds.length ? item.tripIds.map(tripTitle).join('、') : '未指派旅程'}</p>
+          <div className="access-code-actions">
+            <button type="button" className="small-action" disabled={revokingId === item.id || isSaving} onClick={() => isEditing ? cancelEdit() : startEdit(item)}>{isEditing ? '取消編輯' : '編輯'}</button>
+            <button type="button" className="small-action" disabled={revokingId === item.id || isSaving} onClick={() => void revoke(item)}>{revokingId === item.id ? '撤銷中…' : '撤銷'}</button>
+          </div>
+          {isEditing && <form className="access-code-edit" onSubmit={(event) => { event.preventDefault(); void saveEdit(item) }}>
+            <fieldset className="access-trip-picker">
+              <legend>可查看的旅程</legend>
+              {trips.map((trip) => <label key={trip.id} className="access-trip-option">
+                <input type="checkbox" checked={editTripIds.includes(trip.id)} onChange={() => toggleEditTrip(trip.id)} />
+                <span>{trip.title}</span>
+                <small>{trip.destination}</small>
+              </label>)}
+            </fieldset>
+            <label htmlFor={`access-edit-expiry-${item.id}`}>到期時間</label>
+            <select id={`access-edit-expiry-${item.id}`} value={editExpiry} onChange={(event) => setEditExpiry(event.target.value)}>
+              <option value="unchanged">不變更</option>
+              {accessExpiryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+            <p className="access-admin-description">延長或變更到期時間會從現在起重新計算。已到期的通行碼延長後，訪客需重新輸入通行碼。</p>
+            {editError && <p className="notice danger" role="alert">{editError}</p>}
+            <button type="submit" disabled={isSaving || !editTripIds.length}>{isSaving ? '正在儲存…' : '儲存變更'}</button>
+          </form>}
+        </article>
+      })}
     </div>
   </section>
 }

@@ -510,6 +510,7 @@ test('validates access-code requests before issuing a code', async (t) => {
       [{ label: '家人', tripIds: 'sqlite-trip' }, '請指定 1 到 100 個旅程。'],
       [{ label: '家人', tripIds: Array.from({ length: 101 }, (_, index) => `trip-${index}`) }, '請指定 1 到 100 個旅程。'],
       [{ label: '家人', tripIds: ['missing-trip'] }, '指定的旅程不存在。'],
+      [{ label: '家人', tripIds: ['sqlite-trip'], expiresInDays: 14 }, '到期時間只能是 7、30、90 天或永久。'],
     ]
     for (const [body, error] of invalidRequests) {
       const result = await createAccessCode(api, cookie, body)
@@ -537,6 +538,145 @@ test('guest access fails with a clear message when its trips are removed', async
       status: 403,
       output: { error: '此通行碼尚未指派可查看的旅程。' },
     })
+  } finally {
+    database.close()
+  }
+})
+
+test('expired guest codes end their sessions and stop logging in without rate limiting', async (t) => {
+  const provider = useMockOidc(t)
+  const database = new DatabaseSync(':memory:')
+  try {
+    const api = apiWith(database)
+    const cookie = await adminCookie(api, provider)
+    await requestWorkspace(api, 'PUT', testWorkspace(), { cookie })
+
+    const created = await createAccessCode(api, cookie, { label: '短期', tripIds: ['sqlite-trip'], expiresInDays: 7 })
+    assert.equal(created.status, 201)
+    const expectedMs = Date.now() + 7 * 24 * 60 * 60 * 1000
+    assert.ok(Math.abs(Date.parse(created.output.access.expiresAt) - expectedMs) < 60_000)
+
+    const guest = await guestCookie(api, created.output.code)
+    const codeId = created.output.access.id
+    database.prepare('UPDATE access_codes SET expires_at = ? WHERE id = ?').run(Date.now() - 1000, codeId)
+
+    assert.equal((await requestWorkspace(api, 'GET', undefined, { cookie: guest })).status, 401)
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM auth_sessions WHERE role = 'code' AND subject = ?").get(codeId).count, 0)
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const login = await requestApi(api, '/api/auth/login', 'POST', { code: created.output.code })
+      assert.equal(login.status, 403)
+      assert.deepEqual(login.output, { error: '通行碼已到期，請向管理員索取新的通行碼。' })
+    }
+  } finally {
+    database.close()
+  }
+})
+
+test('administrators change guest trips and expiry without reissuing the code', async (t) => {
+  const provider = useMockOidc(t)
+  const database = new DatabaseSync(':memory:')
+  try {
+    const api = apiWith(database)
+    const cookie = await adminCookie(api, provider)
+    const workspace = testWorkspace(['trip-a', 'trip-b'])
+    await requestWorkspace(api, 'PUT', workspace, { cookie })
+    const created = await createAccessCode(api, cookie, { label: '家人', tripIds: ['trip-a'], expiresInDays: 30 })
+    const guest = await guestCookie(api, created.output.code)
+    const codePath = `/api/access-codes/${created.output.access.id}`
+
+    const movedTrips = await requestApi(api, codePath, 'PATCH', { tripIds: ['trip-b'] }, { cookie })
+    assert.equal(movedTrips.status, 200)
+    assert.deepEqual(movedTrips.output.access.tripIds, ['trip-b'])
+    assert.equal(movedTrips.output.access.expiresAt, created.output.access.expiresAt)
+    assert.deepEqual((await requestWorkspace(api, 'GET', undefined, { cookie: guest })).output.trips.map((trip) => trip.id), ['trip-b'])
+
+    const extended = await requestApi(api, codePath, 'PATCH', { expiresInDays: 90 }, { cookie })
+    assert.equal(extended.status, 200)
+    assert.ok(Math.abs(Date.parse(extended.output.access.expiresAt) - (Date.now() + 90 * 24 * 60 * 60 * 1000)) < 60_000)
+    assert.deepEqual(extended.output.access.tripIds, ['trip-b'])
+
+    const permanent = await requestApi(api, codePath, 'PATCH', { expiresInDays: null }, { cookie })
+    assert.equal(permanent.status, 200)
+    assert.equal(permanent.output.access.expiresAt, null)
+    assert.equal((await requestWorkspace(api, 'GET', undefined, { cookie: guest })).status, 200)
+  } finally {
+    database.close()
+  }
+})
+
+test('validates and authorizes access-code changes', async (t) => {
+  const provider = useMockOidc(t)
+  const database = new DatabaseSync(':memory:')
+  try {
+    const api = apiWith(database)
+    const admin = await adminCookie(api, provider)
+    await requestWorkspace(api, 'PUT', testWorkspace(), { cookie: admin })
+    const created = await createAccessCode(api, admin, { label: '家人', tripIds: ['sqlite-trip'] })
+    const codePath = `/api/access-codes/${created.output.access.id}`
+    const viewer = await viewerCookie(api, provider)
+    const guest = await guestCookie(api, created.output.code)
+
+    const invalidChanges = [
+      [{}, '請指定要更新的旅程或到期時間。'],
+      [{ expiresInDays: 14 }, '到期時間只能是 7、30、90 天或永久。'],
+      [{ tripIds: [] }, '請指定 1 到 100 個旅程。'],
+      [{ tripIds: ['missing-trip'] }, '指定的旅程不存在。'],
+    ]
+    for (const [body, error] of invalidChanges) {
+      const result = await requestApi(api, codePath, 'PATCH', body, { cookie: admin })
+      assert.equal(result.status, 400)
+      assert.deepEqual(result.output, { error })
+    }
+
+    const missingId = '00000000-0000-4000-8000-000000000000'
+    assert.equal((await requestApi(api, `/api/access-codes/${missingId}`, 'PATCH', { expiresInDays: 7 }, { cookie: admin })).status, 404)
+    assert.equal((await requestApi(api, codePath, 'PUT', { expiresInDays: 7 }, { cookie: admin })).status, 405)
+
+    for (const cookie of [viewer, guest]) {
+      assert.equal((await requestApi(api, codePath, 'PATCH', { expiresInDays: 7 }, { cookie })).status, 403)
+    }
+    assert.equal((await requestApi(api, codePath, 'PATCH', { expiresInDays: 7 })).status, 401)
+
+    const listed = await requestApi(api, '/api/access-codes', 'GET', undefined, { cookie: admin })
+    assert.deepEqual(listed.output.codes.map((code) => [code.tripIds, code.expiresAt]), [[['sqlite-trip'], null]])
+  } finally {
+    database.close()
+  }
+})
+
+test('adds expiry support to access-code tables created before it existed', async (t) => {
+  const provider = useMockOidc(t)
+  const database = new DatabaseSync(':memory:')
+  try {
+    database.exec(`
+      CREATE TABLE access_codes (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        code_hash TEXT NOT NULL UNIQUE,
+        trip_ids_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `)
+    database.prepare('INSERT INTO access_codes (id, label, code_hash, trip_ids_json, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      '11111111-1111-4111-8111-111111111111',
+      '舊通行碼',
+      createHash('sha256').update('legacy-code', 'utf8').digest('hex'),
+      '["sqlite-trip"]',
+      '2026-01-01T00:00:00.000Z',
+    )
+    const api = apiWith(database)
+    assert.ok(database.prepare('PRAGMA table_info(access_codes)').all().some((column) => column.name === 'expires_at'))
+
+    const cookie = await adminCookie(api, provider)
+    const listed = await requestApi(api, '/api/access-codes', 'GET', undefined, { cookie })
+    assert.deepEqual(listed.output.codes, [{
+      id: '11111111-1111-4111-8111-111111111111',
+      label: '舊通行碼',
+      tripIds: ['sqlite-trip'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      expiresAt: null,
+    }])
+    assert.equal((await requestApi(api, '/api/auth/login', 'POST', { code: 'legacy-code' })).status, 200)
   } finally {
     database.close()
   }

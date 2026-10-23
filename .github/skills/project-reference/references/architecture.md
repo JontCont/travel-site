@@ -22,8 +22,9 @@
 | `POST /api/auth/logout` | Public | Ends the current session. |
 | `GET /api/auth/oidc/start` | Public | Stores a 10-minute transaction (state, nonce, PKCE verifier) and redirects to the Synology authorize endpoint. Errors redirect to `/?auth_error=<code>`. |
 | `GET /api/auth/oidc/callback` | Public | Checks state, exchanges the code, verifies the ID token, maps the role, and sets the session cookie. Returns 200 HTML with a meta refresh instead of 302, so the cookie survives the cross-site redirect. Errors redirect to `/?auth_error=<code>`. |
-| `GET /api/access-codes` | Admin | Lists `{id, label, tripIds, createdAt}`. Never returns code values. 403 for other roles. |
-| `POST /api/access-codes` | Admin | Body `{label, tripIds}`: label 1–60 characters, 1–100 known trips. 201 `{code, access}`. The code is shown once. |
+| `GET /api/access-codes` | Admin | Lists `{id, label, tripIds, createdAt, expiresAt}`. `expiresAt` is an ISO time or `null` for permanent. Never returns code values. 403 for other roles. |
+| `POST /api/access-codes` | Admin | Body `{label, tripIds, expiresInDays?}`: label 1–60 characters, 1–100 known trips. `expiresInDays` is 7, 30, 90, or `null` (permanent, the default when omitted). 201 `{code, access}`. The code is shown once. |
+| `PATCH /api/access-codes/:id` | Admin | Body with `tripIds` and/or `expiresInDays` (at least one). Changing trips takes effect on the guest's next request. Setting an expiry restarts the countdown from now. 400 for invalid values, 404 when missing. |
 | `DELETE /api/access-codes/:id` | Admin | Revokes the code and deletes its sessions. 404 when missing. |
 | `GET /api/map-config` | Any session | Returns `AMAP_API_KEY` (the JS key). 401 without a session. |
 | `GET /api/workspace` | Any session | Returns the workspace. Code sessions get only their assigned trips, and 403 when none are assigned. 401 without a session. 503 when SSO is not configured. |
@@ -40,7 +41,7 @@ Every `/api/*` path except `/api/auth/*` must pass the session check before its 
 - Access codes are generated server-side from 18 random bytes (base64url). Only the SHA-256 hash is stored, in `access_codes`, and the code is shown once.
 - The Synology login uses Authorization Code with PKCE (S256). The `state` is stored as a hash. The `nonce` and PKCE verifier are stored in `oidc_transactions` for 10 minutes. The ID token is verified with RS256 against the issuer's JWKS, checking `iss`, `aud`, `azp`, `exp`, `iat` (60 s skew), `nonce`, `sub`, and the username.
 - Session cookie `trip_session` is HttpOnly, SameSite=Strict, and Path=/. It is marked Secure when `TRIP_COOKIE_SECURE=1` or `NODE_ENV=production`. `server.mjs` sets `TRIP_COOKIE_SECURE=1` when the variable is unset. Browsers accept Secure cookies on `http://localhost`, but a plain-HTTP LAN address will not keep the cookie unless you set `TRIP_COOKIE_SECURE=0`.
-- Sessions last six calendar months. The `auth_sessions` table stores a SHA-256 hash of the token, the role (`admin`, `viewer`, or `code`), and the subject (the DSM username or the access code id). Code sessions re-check the access code on every request, and revoking a code deletes its sessions.
+- Sessions last six calendar months. The `auth_sessions` table stores a SHA-256 hash of the token, the role (`admin`, `viewer`, or `code`), and the subject (the DSM username or the access code id). Code sessions re-check the access code on every request. Revoking a code, or its expiry passing, deletes its sessions. An expired code's login returns 403 and does not count toward the rate limit.
 - The rate limit uses the socket address. With `TRIP_TRUST_PROXY=1`, it reads `CF-Connecting-IP` first, then the rightmost `X-Forwarded-For` entry.
 
 ## Storage

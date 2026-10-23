@@ -83,11 +83,19 @@ export function clearAuthErrorFromUrl(): void {
   window.history.replaceState(null, '', window.location.pathname)
 }
 
+export type AccessCodeExpiryDays = 7 | 30 | 90 | null
+
 export type AccessCodeSummary = {
   id: string
   label: string
   tripIds: string[]
   createdAt: string
+  expiresAt: string | null
+}
+
+export type AccessCodeUpdate = {
+  tripIds?: string[]
+  expiresInDays?: AccessCodeExpiryDays
 }
 
 export type CreatedAccessCode = {
@@ -100,7 +108,8 @@ function isAccessCodeSummary(value: unknown): value is AccessCodeSummary {
     typeof value.id === 'string' &&
     typeof value.label === 'string' &&
     Array.isArray(value.tripIds) && value.tripIds.every((tripId) => typeof tripId === 'string') &&
-    typeof value.createdAt === 'string'
+    typeof value.createdAt === 'string' &&
+    (value.expiresAt === null || typeof value.expiresAt === 'string')
 }
 
 export async function listAccessCodes(): Promise<AccessCodeSummary[]> {
@@ -113,12 +122,16 @@ export async function listAccessCodes(): Promise<AccessCodeSummary[]> {
   return codes
 }
 
-export async function createAccessCode(label: string, tripIds: string[]): Promise<CreatedAccessCode> {
+export async function createAccessCode(
+  label: string,
+  tripIds: string[],
+  expiresInDays: AccessCodeExpiryDays,
+): Promise<CreatedAccessCode> {
   const response = await fetch('/api/access-codes', {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ label, tripIds }),
+    body: JSON.stringify({ label, tripIds, expiresInDays }),
   })
   if (!response.ok) throw new Error(await readError(response, `建立通行碼失敗（HTTP ${response.status}）。`))
   const value: unknown = await response.json()
@@ -126,6 +139,21 @@ export async function createAccessCode(label: string, tripIds: string[]): Promis
   const access: unknown = value.access
   if (!isAccessCodeSummary(access)) throw new Error('建立通行碼回傳的資料格式不正確。')
   return { code: value.code, access }
+}
+
+export async function updateAccessCode(id: string, update: AccessCodeUpdate): Promise<AccessCodeSummary> {
+  const response = await fetch(`/api/access-codes/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(update),
+  })
+  if (!response.ok) throw new Error(await readError(response, `更新通行碼失敗（HTTP ${response.status}）。`))
+  const value: unknown = await response.json()
+  if (!isRecord(value)) throw new Error('更新通行碼回傳的資料格式不正確。')
+  const access: unknown = value.access
+  if (!isAccessCodeSummary(access)) throw new Error('更新通行碼回傳的資料格式不正確。')
+  return access
 }
 
 export async function revokeAccessCode(id: string): Promise<void> {
