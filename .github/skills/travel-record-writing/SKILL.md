@@ -1,6 +1,6 @@
 ---
 name: travel-record-writing
-description: Use when changing how trip records are written to the system: admin autosave, viewer notepad saves, footprint imports, or trip, stop, flight, lodging, and photo fields saved to the SQLite workspace. Also use for 寫入系統、紀錄寫入、自動儲存、記事本、足跡匯入、旅程資料寫入.
+description: Use when changing how trip records are written to the system: admin autosave, viewer notepad saves, or trip, stop, flight, lodging, and photo fields saved to the SQLite workspace. Also use for 寫入系統、紀錄寫入、自動儲存、記事本、旅程資料寫入.
 ---
 
 # Travel record writing
@@ -13,10 +13,7 @@ How trip data moves from the UI into the single SQLite workspace row, and the ru
 |---|---|---|---|
 | Admin autosave | Admin | `PUT /api/workspace` (whole document) | `App.tsx` effect on `workspace` calls `saveWorkspace`. Writes are serialized by `saveSequence`. |
 | Admin edits | Admin | Through autosave | `updateTrip` in `App.tsx`. Returns early for non-admins. |
-| Footprint import | Admin | Through autosave | `parseTimelineExport` and `mergeFootprints` in `src/services/footprint.service.ts`. |
 | Notepad | Any session | `PUT /api/notepad` with `{tripId, notepad}` | `saveTripNotepad(trip.id, draft)` in `src/services/trip-workspace.service.ts`. |
-
-Footprint import accepts three export shapes: a semantic-entry array, `timelineObjects`, and `locations`. It keeps entries inside the trip's dates in the trip's time zone, removes duplicates by id, and caps the result at 300. The footprints tab is hidden for China trips.
 
 ## Workflow
 
@@ -33,5 +30,4 @@ Footprint import accepts three export shapes: a semantic-entry array, `timelineO
 
 - A viewer's `PUT /api/workspace` returns 403. A viewer's `PUT /api/notepad` for an existing trip succeeds and changes only that trip's notepad.
 - A payload that fails the DTO returns 400, and the stored row is unchanged.
-- A footprint import drops entries outside the trip's dates and caps the result at 300. `tests/footprint.test.mjs` covers the date filter and deduplication. The 300 cap has no test, so check it by hand.
 - Editing or reordering stops keeps every stop ID unchanged.

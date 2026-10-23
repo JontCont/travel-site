@@ -48,15 +48,6 @@ export function buildGoogleDirectionsUrl(origin: string, destination: string, mo
   return url.toString()
 }
 
-export function buildGoogleMapsCoordinateUrl(coordinates: string): string {
-  const [longitude, latitude] = coordinates.split(',')
-  const url = new URL('https://www.google.com/maps/search/')
-  url.searchParams.set('api', '1')
-  url.searchParams.set('query', `${latitude},${longitude}`)
-  return url.toString()
-}
-
-
 export async function getMapApiKey(): Promise<string> {
   const response = await fetch('/api/map-config', { credentials: 'same-origin' })
   let value: unknown

@@ -15,7 +15,7 @@ The trip data model the app stores and validates. Types are in `src/models/trip.
 - `timeZone` is one string per trip, not per day. The DTO checks only that it is a non-empty string, so an invalid name passes validation and fails later when dates are formatted.
 - `destination` is one string. A trip has one destination.
 - Lodging: `hotelName`, `hotelAddress`, and optional `hotelCoordinates`, `hotelDetails`, and `hotelFacilityGroups`.
-- Optional trip fields: `notepad`, `footprints`, `photoShareUrl` (https only, checked by the DTO), `travelers`, `outboundFlight`, `returnFlight`, and luggage limits (`carryOnKg`, `checkedBagKg`, `personalItemPieces`, `carryOnPieces`, `checkedBagPieces`).
+- Optional trip fields: `notepad`, `photoShareUrl` (https only, checked by the DTO), `travelers`, `outboundFlight`, `returnFlight`, and luggage limits (`carryOnKg`, `checkedBagKg`, `personalItemPieces`, `carryOnPieces`, `checkedBagPieces`).
 - Stop: `id`, `name`, `address`, `time` (HH:mm), `duration`, optional `durationMax`, `notes`, `coordinates` (a string; an empty value shows "尚無座標"), `hideFromMap`, and opening-hours fields (`openingHours`, `openingHoursStatus` as `unverified` or `confirmed`, `openingHoursSource`, `openingHoursCheckedAt`).
 - Not in the model: reservation windows, travel time between stops, stored route results, multiple destinations, and per-day time zones.
 

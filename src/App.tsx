@@ -4,8 +4,7 @@ import { getTripStatus, sortTripsNearToFar, type TripStatus } from './services/d
 import { listDates } from './services/trip.service'
 import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
 import { getAuthStatus, loginWithAccessCode, logout as logoutFromServer, type AccessRole } from './services/auth.service'
-import { buildGoogleDirectionsUrl, buildGoogleMapsCoordinateUrl, buildTripMapSearchUrl, getMapApiKey, isChinaTrip, routeModeLabels, type RouteMode } from './services/map.service'
-import { mergeFootprints, parseTimelineExport } from './services/footprint.service'
+import { buildGoogleDirectionsUrl, buildTripMapSearchUrl, getMapApiKey, isChinaTrip, routeModeLabels, type RouteMode } from './services/map.service'
 import './App.scss'
 
 function amapWalkingRoute(origin: string, destination: string, destinationName: string, key: string) {
@@ -149,8 +148,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'footprints' | 'photos'>('overview')
-  const [footprintError, setFootprintError] = useState('')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos'>('overview')
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
   const [mapApiKey, setMapApiKey] = useState('')
@@ -295,21 +293,6 @@ function App() {
       ...workspace,
       trips: workspace.trips.map((item) => item.id === trip.id ? update(item) : item),
     })
-  }
-
-  async function importFootprints(file: File) {
-    if (!trip) return
-    try {
-      const incoming = parseTimelineExport(JSON.parse(await file.text()), {
-        startDate: trip.startDate,
-        endDate: trip.endDate,
-        timeZone: trip.timeZone,
-      })
-      setFootprintError(incoming.length ? '' : '此檔案在旅程日期內沒有可用的足跡紀錄。')
-      updateTrip((current) => ({ ...current, footprints: mergeFootprints(current.footprints, incoming) }))
-    } catch (error) {
-      setFootprintError(error instanceof Error ? error.message : '匯入失敗，請確認檔案格式。')
-    }
   }
 
   function updateViewerNotepad(tripId: string, value: string) {
@@ -502,7 +485,6 @@ function App() {
             <button className={tab === 'flights' ? 'selected' : ''} onClick={() => setTab('flights')}>航班與住宿</button>
             <button className={tab === 'travelers' ? 'selected' : ''} onClick={() => setTab('travelers')}>旅客與座位</button>
             <button className={tab === 'notepad' ? 'selected' : ''} onClick={() => setTab('notepad')}>記事本</button>
-            {!isChinaTrip(trip.country) && <button className={tab === 'footprints' ? 'selected' : ''} onClick={() => setTab('footprints')}>足跡</button>}
             <button className={tab === 'photos' ? 'selected' : ''} onClick={() => setTab('photos')}>相簿</button>
           </nav>
           {tab === 'itinerary' && <>
@@ -580,22 +562,6 @@ function App() {
             {trip.photoShareUrl
               ? <iframe className="photos-frame" title="旅程相簿" src={trip.photoShareUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
               : <p className="muted">尚未設定相簿連結。</p>}
-          </section>}
-          {tab === 'footprints' && !isChinaTrip(trip.country) && <section className="details-grid">
-            <div>
-              <h2>足跡匯入</h2>
-              <p className="muted">匯入 Google 地圖時間軸匯出的 JSON，只保留旅程日期內的紀錄，並以 Google 地圖開啟座標。</p>
-              {authRole === 'admin' && <div className="inline-actions">
-                <input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFootprints(file); event.target.value = '' }} />
-                {(trip.footprints?.length ?? 0) > 0 && <button onClick={() => updateTrip((current) => ({ ...current, footprints: [] }))}>清除足跡</button>}
-              </div>}
-              {footprintError && <p className="error">{footprintError}</p>}
-            </div>
-            {(trip.footprints?.length ?? 0) === 0 && <p className="muted">尚未匯入足跡。</p>}
-            {trip.footprints?.map((item) => <div key={item.id} className="inline-actions">
-              <span>{new Date(item.startedAt).toLocaleString('zh-TW', { timeZone: trip.timeZone, dateStyle: 'short', timeStyle: 'short' })}</span>
-              <a href={buildGoogleMapsCoordinateUrl(item.coordinates)} target="_blank" rel="noreferrer">{item.name ?? item.coordinates} 地圖查看 ↗</a>
-            </div>)}
           </section>}
           {tab === 'flights' && <div className="details-grid">
             {(['outboundFlight', 'returnFlight'] as const).map((direction) => {

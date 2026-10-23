@@ -1,4 +1,4 @@
-import type { Flight, Footprint, HotelDetails, HotelFacilityGroup, Stop, Traveler, Trip, TripWorkspace } from '../models/trip.ts'
+import type { Flight, HotelDetails, HotelFacilityGroup, Stop, Traveler, Trip, TripWorkspace } from '../models/trip.ts'
 import { isLocalDate, listDates } from '../services/date.service.ts'
 
 export type StopDto = Stop
@@ -35,15 +35,6 @@ function isHttpsUrl(value: unknown): value is string {
   } catch {
     return false
   }
-}
-
-function isFootprint(value: unknown): value is Footprint {
-  return isRecord(value) &&
-    typeof value.id === 'string' && value.id !== '' &&
-    typeof value.startedAt === 'string' && !Number.isNaN(Date.parse(value.startedAt)) &&
-    typeof value.endedAt === 'string' && !Number.isNaN(Date.parse(value.endedAt)) &&
-    typeof value.coordinates === 'string' && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(value.coordinates) &&
-    (value.name === undefined || typeof value.name === 'string')
 }
 
 function isTraveler(value: unknown): value is TravelerDto {
@@ -101,7 +92,6 @@ export function isTripDto(value: unknown): value is TripDto {
       return !Array.isArray(day) || !day.every(isStop)
     })) return false
   if (value.hotelCoordinates !== undefined && typeof value.hotelCoordinates !== 'string') return false
-  if (value.footprints !== undefined && (!Array.isArray(value.footprints) || !value.footprints.every(isFootprint))) return false
   if (value.photoShareUrl !== undefined && !isHttpsUrl(value.photoShareUrl)) return false
   if (value.hotelDetails !== undefined && !isHotelDetails(value.hotelDetails)) return false
   if (value.hotelFacilityGroups !== undefined &&

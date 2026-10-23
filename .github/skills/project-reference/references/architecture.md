@@ -8,8 +8,8 @@
 | `route-api.mjs` | `createTripApi` (auth, workspace, notepad, map config) and `walkApi` (`POST /api/walk`). Exports `openTripDatabase`. |
 | `src/dto/trip-workspace.dto.ts` | Type guards for the workspace. Used by the client and the server. |
 | `src/models/` | Types for trips, stops, and walking legs. |
-| `src/services/` | Client services: auth, workspace load and save, map links, footprints, walking evaluation, dates. |
-| `src/App.tsx` | Main UI: trip list, day timeline, photos, flights, footprints, notepad. |
+| `src/services/` | Client services: auth, workspace load and save, map links, walking evaluation, dates. |
+| `src/App.tsx` | Main UI: trip list, day timeline, photos, flights, notepad. |
 | `Dockerfile`, `docker-compose.yml` | Container build and runtime. |
 
 ## Endpoints
@@ -73,6 +73,6 @@ Every `/api/*` path except the auth endpoints must pass the session check before
 ## Map providers
 
 - `isChinaTrip(country)` in `src/services/map.service.ts` is true when the country starts with 中國.
-- China trips use AMap: place search through `uri.amap.com/search`, and LightMap navigation through `m.amap.com/navi/` with the JS key from `/api/map-config`. The footprints tab is hidden.
+- China trips use AMap for place search through `uri.amap.com/search`, and LightMap navigation through `m.amap.com/navi/` with the JS key from `/api/map-config`.
 - Other trips use Google Maps search and directions links for walking, transit, and driving. The app calls no routing API for them.
 - Only the server's `/api/walk` computes walking distance and time, and only for AMap. No client code calls it.
