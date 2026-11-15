@@ -387,7 +387,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
                       geography={geo}
                       fill="#dbe5da"
                       stroke="#c2d4c0"
-                      strokeWidth={0.5}
+                      strokeWidth={Math.max(0.2, 0.6 / Math.sqrt(zoom))}
                       className="map-geography"
                       style={{ outline: 'none' }}
                     />
@@ -402,8 +402,8 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
                   from={line.from}
                   to={line.to}
                   stroke="#2e6647"
-                  strokeWidth={2}
-                  strokeDasharray="4 3"
+                  strokeWidth={Math.max(1, 2.5 / zoom)}
+                  strokeDasharray={`${5 / zoom} ${3 / zoom}`}
                   strokeLinecap="round"
                 />
               ))}
@@ -411,9 +411,13 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
               {/* Hotel Marker if available */}
               {hotelCoords && (
                 <Marker coordinates={hotelCoords}>
-                  <g style={{ cursor: 'pointer' }} onClick={() => setSelectedStopId('hotel')}>
-                    <circle r={10} fill="#b85d38" stroke="#ffffff" strokeWidth={2} />
-                    <text textAnchor="middle" y={4} fontSize={10} fill="#ffffff" fontWeight="bold">
+                  <g
+                    transform={`scale(${1 / Math.max(0.5, zoom)})`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setSelectedStopId('hotel')}
+                  >
+                    <circle r={12} fill="#b85d38" stroke="#ffffff" strokeWidth={2} />
+                    <text textAnchor="middle" y={4} fontSize={11} fill="#ffffff" fontWeight="bold">
                       ⌂
                     </text>
                   </g>
@@ -429,23 +433,26 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
                     coordinates={item.coords}
                     onClick={() => setSelectedStopId(item.stop.id)}
                   >
-                    <g style={{ cursor: 'pointer' }}>
+                    <g
+                      transform={`scale(${1 / Math.max(0.5, zoom)})`}
+                      style={{ cursor: 'pointer' }}
+                    >
                       {isSelected && (
-                        <circle r={16} fill="none" stroke="#2e6647" strokeWidth={2.5} opacity={0.6} />
+                        <circle r={18} fill="none" stroke="#2e6647" strokeWidth={3} opacity={0.5} />
                       )}
                       <circle
-                        r={11}
-                        fill={isSelected ? '#17382e' : '#2e6647'}
+                        r={12}
+                        fill={isSelected ? '#143827' : '#2e6647'}
                         stroke="#ffffff"
                         strokeWidth={2}
                       />
                       <text
                         textAnchor="middle"
                         y={4}
-                        fontSize={10}
+                        fontSize={11}
                         fill="#ffffff"
                         fontWeight="bold"
-                        fontFamily="sans-serif"
+                        fontFamily="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif"
                       >
                         {idx + 1}
                       </text>
@@ -457,9 +464,9 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
               {/* Click Pin Marker (when in marking mode) */}
               {markedCoords && (
                 <Marker coordinates={markedCoords}>
-                  <g>
-                    <circle r={8} fill="#e63946" stroke="#ffffff" strokeWidth={2} />
-                    <circle r={14} fill="none" stroke="#e63946" strokeWidth={1.5} strokeDasharray="3 2" />
+                  <g transform={`scale(${1 / Math.max(0.5, zoom)})`}>
+                    <circle r={7} fill="#e63946" stroke="#ffffff" strokeWidth={2} />
+                    <circle r={14} fill="none" stroke="#e63946" strokeWidth={2} strokeDasharray="3 2" />
                   </g>
                 </Marker>
               )}
