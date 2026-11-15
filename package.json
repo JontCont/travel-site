@@ -20,5 +20,8 @@
   "devDependencies": {
     "@types/node": "^24.13.3",
     "oxlint": "^1.81.0"
+  },
+  "overrides": {
+    "dompurify": ">=3.4.18"
   }
 }
