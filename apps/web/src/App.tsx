@@ -9,14 +9,11 @@ import {
   routeModeLabels,
   sortTripsNearToFar,
   type RouteMode,
-  type Stop,
   type Trip,
   type TripStatus,
   type TripWorkspace,
 } from '@travel/shared'
-import { AiAssistantPanel, AiSettingsPanel } from './AiPanels'
 import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
-import { getAiAvailability, getAiSettings } from './services/ai.service'
 import {
   clearAuthErrorFromUrl,
   createAccessCode,
@@ -424,9 +421,8 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access' | 'ai-settings' | 'ai-assistant'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access'>('overview')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const [aiReady, setAiReady] = useState(false)
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
   const [mapApiKey, setMapApiKey] = useState('')
@@ -535,23 +531,6 @@ function App() {
     }
   }, [authRole])
 
-  useEffect(() => {
-    if (!authRole) return
-    let cancelled = false
-    const readiness = authRole === 'admin'
-      ? getAiSettings().then((summary) => summary.ready)
-      : getAiAvailability()
-    readiness
-      .then((ready) => {
-        if (!cancelled) setAiReady(ready)
-      })
-      .catch(() => {
-        if (!cancelled) setAiReady(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [authRole])
 
   useEffect(() => {
     if (loading || !workspace || authRole !== 'admin') return
@@ -620,23 +599,6 @@ function App() {
     setMobileNavOpen(false)
   }
 
-  function createTripFromAi(next: Trip) {
-    if (!workspace) return
-    setWorkspace({ ...workspace, trips: [...workspace.trips, next], activeTripId: next.id })
-    setDay(next.startDate)
-    setTab('itinerary')
-    setEditing(null)
-  }
-
-  function addAiStops(tripId: string, date: string, stops: Stop[]) {
-    if (!workspace) return
-    setWorkspace({
-      ...workspace,
-      trips: workspace.trips.map((item) => item.id === tripId
-        ? { ...item, days: { ...item.days, [date]: [...(item.days[date] ?? []), ...stops].sort((a, b) => a.time.localeCompare(b.time)) } }
-        : item),
-    })
-  }
 
   function updateStop(id: string, patch: Partial<Trip['days'][string][number]>) {
     updateStops(stops.map((stop) => stop.id === id ? { ...stop, ...patch } : stop))
@@ -712,9 +674,6 @@ function App() {
     getTripStatus(item.startDate, item.endDate, item.timeZone, statusTime) !== 'ended')
   const archivedTrips = workspace.trips.filter((item) =>
     getTripStatus(item.startDate, item.endDate, item.timeZone, statusTime) === 'ended')
-  const askableTrips = authRole === 'admin' ? workspace.trips : workspace.trips.filter((item) => item.aiAskEnabled === true)
-  const aiTrip: Trip | undefined = askableTrips.find((item) => item.id === activeTripId) ?? askableTrips[0]
-  const canUseAiAssistant = aiReady && aiTrip !== undefined
 
   function renderTripLinks(trips: Trip[]) {
     return trips.map((item) => {
@@ -754,7 +713,6 @@ function App() {
         <button className="brand" aria-label="途間首頁：我的旅程" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}><span className="brand-mark">✳</span><span>途間 <small>TRIP STUDIO</small></span></button>
         <div className="nav-label">你的旅程 <span className="trip-count">{currentTrips.length}</span></div>
         <button className={`side-link ${tab === 'timeline' ? 'active' : ''}`} onClick={() => { setTab('timeline'); setMobileNavOpen(false) }}>◷ <span>旅程時間軸</span></button>
-        {canUseAiAssistant && <button className={`side-link ${tab === 'ai-assistant' ? 'active' : ''}`} onClick={() => { setTab('ai-assistant'); setMobileNavOpen(false) }}>✧ <span>AI 助手</span></button>}
         <div className="trip-list">{renderTripLinks(currentTrips.slice(0, 3))}</div>
         {currentTrips.length > 3 && <button className="trip-list-more" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}>瀏覽更多</button>}
         <div className="nav-label nav-section">這趟旅程</div>
@@ -764,7 +722,6 @@ function App() {
         {authRole === 'admin' && <>
           <div className="nav-label nav-section">管理</div>
           <button className={`side-link ${tab === 'access' ? 'active' : ''}`} onClick={() => { setTab('access'); setMobileNavOpen(false) }}>◈ <span>訪客通行碼</span></button>
-          <button className={`side-link ${tab === 'ai-settings' ? 'active' : ''}`} onClick={() => { setTab('ai-settings'); setMobileNavOpen(false) }}>✦ <span>AI 設定</span></button>
         </>}
         <div className="sidebar-bottom">
           <span className="status-dot" /> NAS SQLite · {roleLabels[authRole]}
@@ -776,7 +733,7 @@ function App() {
           <div className="topbar-left">
             <button className="mobile-menu-button" aria-label="選單" onClick={() => setMobileNavOpen((open) => !open)}>☰</button>
             {tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}
-            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'ai-settings' ? '管理 / AI 設定' : tab === 'ai-assistant' ? 'AI 助手' : tab === 'access' ? '管理 / 訪客通行碼' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
+            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'access' ? '管理 / 訪客通行碼' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
           </div>
           <span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span>
           <button className="logout-button" onClick={() => void handleLogout()}>登出</button>
@@ -784,7 +741,7 @@ function App() {
         <div className="content">
           {saveError && <p className="notice danger" role="alert">SQLite 儲存失敗：{saveError}</p>}
           {authError && <p className="notice danger" role="alert">{authError}</p>}
-          {tab === 'ai-assistant' && canUseAiAssistant && aiTrip ? <AiAssistantPanel trips={askableTrips} activeTrip={aiTrip} askOnly={authRole !== 'admin'} onCreateTrip={createTripFromAi} onAddStops={addAiStops} onReplaceNotepad={updateViewerNotepad} /> : authRole === 'admin' && (tab === 'ai-settings' || tab === 'ai-assistant') ? <AiSettingsPanel onReadyChange={setAiReady} /> : tab === 'access' && authRole === 'admin' ? <AccessCodePanel trips={workspace.trips} /> : tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
+          {tab === 'access' && authRole === 'admin' ? <AccessCodePanel trips={workspace.trips} /> : tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
             <div className="eyebrow">MY TRIPS <span className="eyebrow-rule" /></div>
             <nav className="tabs home-tabs" aria-label="旅程總覽檢視">
               <button className={tab === 'overview' ? 'selected' : ''} onClick={() => setTab('overview')}>旅程卡片</button>
@@ -910,15 +867,6 @@ function App() {
             }}>
               <label>相簿連結（Immich 分享）<input name="photoShareUrl" type="url" placeholder="https://immich 分享連結" defaultValue={trip.photoShareUrl ?? ''} /></label>
               <div className="form-actions"><button type="submit">儲存相簿連結</button></div>
-            </form>
-            <form key={`${trip.id}-ai`} className="settings-form" onSubmit={(event) => {
-              event.preventDefault()
-              const enabled = new FormData(event.currentTarget).has('aiAskEnabled')
-              updateTrip((current) => ({ ...current, aiAskEnabled: enabled }))
-            }}>
-              <label className="settings-check"><input name="aiAskEnabled" type="checkbox" defaultChecked={trip.aiAskEnabled === true} /> 開放 AI 助理詢問給一般使用者（僅能提問，不會修改行程）</label>
-              {!aiReady && <p className="muted">尚未完成 AI 設定，請先到「AI 設定」填入 API 金鑰後再開放。</p>}
-              <div className="form-actions"><button type="submit">儲存 AI 助理設定</button></div>
             </form>
           </div>}
           {tab === 'flights' && <div className="details-grid">
