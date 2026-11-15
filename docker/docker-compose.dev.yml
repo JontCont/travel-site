@@ -1,0 +1,27 @@
+name: "travel-site-dev"
+services:
+  travel-site:
+    extends:
+      file: docker-compose.base.yml
+      service: travel-site
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: dev
+    ports:
+      - "5173:5173"
+      - "4187:4187"
+    environment:
+      NODE_ENV: development
+      PORT: 4187
+      TRIP_HOST: 0.0.0.0
+      TRIP_DATABASE_PATH: /database/trips.sqlite
+    volumes:
+      - ../database:/database
+      - ../apps:/app/apps
+      - /app/apps/web/node_modules
+      - /app/node_modules
+      - ../packages:/app/packages
+      - /app/packages/shared/node_modules
+      - ../tests:/app/tests
+      - ../.agents:/app/.agents

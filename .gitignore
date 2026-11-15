@@ -15,6 +15,8 @@ dist-ssr
 .env
 .env.*
 !.env.example
+database/*.sqlite
+database/*.sqlite-*
 data/*.sqlite
 data/*.sqlite-*
 
@@ -28,3 +30,7 @@ data/*.sqlite-*
 *.njsproj
 *.sln
 *.sw?
+
+# Binary
+*.exe
+*.dll

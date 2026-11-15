@@ -1,0 +1,11 @@
+{
+  "name": "@travel/api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "go run main.go",
+    "dev": "go run main.go",
+    "build": "go build -o travel-api main.go",
+    "test": "go test ./..."
+  }
+}

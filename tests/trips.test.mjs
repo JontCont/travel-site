@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { isTripWorkspaceDto } from '../src/dto/trip-workspace.dto.ts'
-import { getTripStatus, sortTripsNearToFar } from '../src/services/date.service.ts'
-import { defineTrip, listDates } from '../src/services/trip.service.ts'
-import { loadWorkspace } from '../src/services/trip-workspace.service.ts'
+import { isTripWorkspaceDto } from '../packages/shared/src/dto/trip-workspace.dto.ts'
+import { getTripStatus, sortTripsNearToFar } from '../packages/shared/src/services/date.service.ts'
+import { defineTrip, listDates } from '../packages/shared/src/services/trip.service.ts'
+import { loadWorkspace } from '../apps/web/src/services/trip-workspace.service.ts'
 
 function memoryStorage(entries = {}) {
   const data = new Map(Object.entries(entries))

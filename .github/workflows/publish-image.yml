@@ -17,19 +17,28 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: apps/api/go.sum
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
       - name: Test
-        run: npm test
+        run: pnpm test
       - name: Build application
-        run: npm run build
+        run: pnpm run build
 
   publish-image:
     needs: validate
@@ -60,6 +69,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: docker/Dockerfile
+          target: prod
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -84,10 +95,25 @@ jobs:
             --arg image "${IMAGE_NAME,,}" \
             --arg tag "latest" \
             '{image: $image, tag: $tag}')
-          curl --fail --show-error --silent \
-            --connect-timeout 10 --max-time 30 \
+          # Fire-and-forget: n8n may keep the request open while the NAS restarts.
+          # A read timeout after the connection was established still counts as
+          # delivered; failures are reported by n8n to Discord.
+          set +e
+          result=$(curl --fail --show-error --silent --output /dev/null \
+            --write-out '%{http_code} %{time_connect}' \
+            --connect-timeout 10 --max-time 15 \
             --request POST \
             "${DEPLOY_WEBHOOK_URL%/}/${PROJECT}" \
             --header "Content-Type: application/json" \
-            --data "$payload"
-          echo "Deployment webhook triggered successfully."
+            --data "$payload")
+          rc=$?
+          set -e
+          connect_time=${result##* }
+          if [[ $rc -eq 0 ]]; then
+            echo "Deployment webhook triggered successfully."
+          elif [[ $rc -eq 28 && "$connect_time" != "0.000000" ]]; then
+            echo "Deployment webhook accepted; n8n is still processing (no wait)."
+          else
+            echo "::error::Deployment webhook request failed (curl exit $rc)."
+            exit 1
+          fi

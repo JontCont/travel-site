@@ -1,0 +1,66 @@
+# ==========================================
+# Frontend Stage: Install pnpm & dependencies
+# ==========================================
+FROM node:24-alpine AS base
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+WORKDIR /app
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY apps/web/package.json ./apps/web/package.json
+COPY apps/api/package.json ./apps/api/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+
+# ==========================================
+# Frontend Build Stage
+# ==========================================
+FROM base AS build
+
+COPY . .
+RUN pnpm build
+
+# ==========================================
+# Backend Build Stage (Go Gin API)
+# ==========================================
+FROM golang:1.24-alpine AS go-build
+
+WORKDIR /build
+
+COPY apps/api/go.mod apps/api/go.sum ./
+RUN go mod download
+
+COPY apps/api/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /build/travel-api main.go
+
+# ==========================================
+# Production Stage: Hardened, minimal Go runtime
+# ==========================================
+FROM alpine:3.21 AS prod
+
+WORKDIR /app
+ENV GIN_MODE=release \
+    PORT=4187 \
+    TRIP_HOST=0.0.0.0 \
+    TRIP_DATABASE_PATH=/database/trips.sqlite \
+    TRIP_COOKIE_SECURE=1
+
+RUN apk add --no-cache ca-certificates tzdata wget \
+    && mkdir -p /database /app/dist /app/.agents/skills \
+    && addgroup -g 100 -S appgroup \
+    && adduser -u 1026 -S appuser -G appgroup \
+    && chown -R 1026:100 /database /app
+
+COPY --from=build --chown=1026:100 /app/apps/web/dist ./dist
+COPY --from=go-build --chown=1026:100 /build/travel-api ./travel-api
+COPY --chown=1026:100 .agents/skills ./.agents/skills
+
+USER 1026:100
+EXPOSE 4187
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1:4187/api/auth/status || exit 1
+CMD ["/app/travel-api"]

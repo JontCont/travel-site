@@ -1,0 +1,9 @@
+name: "travel-site"
+services:
+  travel-site:
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file:
+      - path: ../.env
+        required: false

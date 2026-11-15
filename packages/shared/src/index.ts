@@ -1,0 +1,7 @@
+export * from './dto/trip-workspace.dto.ts'
+export * from './models/trip.ts'
+export * from './models/walking.ts'
+export * from './services/trip.service.ts'
+export * from './services/date.service.ts'
+export * from './services/walking.service.ts'
+export * from './services/map.service.ts'
