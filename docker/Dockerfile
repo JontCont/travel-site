@@ -21,15 +21,24 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 # ==========================================
 FROM base AS dev
 
+RUN apk add --no-cache go
+
 ENV NODE_ENV=development \
-    PORT=5173 \
-    TRIP_HOST=0.0.0.0
+    PORT=4187 \
+    TRIP_HOST=0.0.0.0 \
+    TRIP_DATABASE_PATH=/database/trips.sqlite
 
 COPY . .
 
+# Pre-compile Go backend so container starts immediately without compile delay
+RUN cd apps/api && go mod download && go build -o /usr/local/bin/travel-api main.go
+
+COPY docker/entrypoint.dev.sh /entrypoint.dev.sh
+RUN chmod +x /entrypoint.dev.sh
+
 EXPOSE 5173 4187
 
-CMD ["pnpm", "dev", "--", "--host", "0.0.0.0"]
+CMD ["/entrypoint.dev.sh"]
 
 # ==========================================
 # Build Stage: Compile production frontend
