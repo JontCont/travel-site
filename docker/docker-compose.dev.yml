@@ -1,0 +1,29 @@
+name: "travel-site-dev"
+services:
+  travel-site:
+    extends:
+      file: docker-compose.base.yml
+      service: travel-site
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: dev
+    ports:
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ../data:/data
+      - ../src:/app/src
+      - ../tests:/app/tests
+      - ../index.html:/app/index.html
+      - ../vite.config.ts:/app/vite.config.ts
+      - ../server.mjs:/app/server.mjs
+      - ../route-api.mjs:/app/route-api.mjs
+      - ../oidc.mjs:/app/oidc.mjs
+      - ../ai-assistant.mjs:/app/ai-assistant.mjs
+      - ../ai-providers.mjs:/app/ai-providers.mjs
+      - ../ai-skills.mjs:/app/ai-skills.mjs
+      - ../ai-crypto.mjs:/app/ai-crypto.mjs
+      - ../.agents:/app/.agents
+    command: npm run dev -- --host 0.0.0.0

@@ -1,0 +1,20 @@
+name: "travel-site"
+services:
+  travel-site:
+    extends:
+      file: docker-compose.base.yml
+      service: travel-site
+    image: ${TRIP_IMAGE:?Set TRIP_IMAGE in .env}
+    pull_policy: always
+    user: "1026:100"
+    ports:
+      - "4187:4187"
+    volumes:
+      - ../data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

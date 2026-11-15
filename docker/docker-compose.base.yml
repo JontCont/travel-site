@@ -1,11 +1,9 @@
 name: "travel-site"
 services:
   travel-site:
-    image: ${TRIP_IMAGE:?Set TRIP_IMAGE in .env}
-    pull_policy: always
-    restart: unless-stopped
     init: true
-    user: "1026:100"
+    restart: unless-stopped
+    stop_grace_period: 30s
     environment:
       TRIP_OIDC_ISSUER: ${TRIP_OIDC_ISSUER:-}
       TRIP_OIDC_CLIENT_ID: ${TRIP_OIDC_CLIENT_ID:-}
@@ -16,15 +14,3 @@ services:
       TRIP_TRUST_PROXY: ${TRIP_TRUST_PROXY:-}
       AMAP_API_KEY: ${AMAP_API_KEY:-}
       AMAP_WEB_KEY: ${AMAP_WEB_KEY:-}
-    volumes:
-      - ./data:/data
-    ports:
-      - "4187:4187"
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    stop_grace_period: 30s

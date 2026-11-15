@@ -21,4 +21,4 @@ All Git commit messages in this repository must strictly adhere to the following
 - `[docs]` - Documentation updates
 - `[test]` - Adding or updating tests
 
-When preparing a commit, refer to `.github/skills/commit-convention/SKILL.md` to ensure the commit message conforms to this standard.
+When preparing a commit, refer to `.agents/skills/commit-convention/SKILL.md` to ensure the commit message conforms to this standard.

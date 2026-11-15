@@ -12,7 +12,7 @@
 | `src/models/` | Types for trips, stops, and walking legs. |
 | `src/services/` | Client services: auth, workspace load and save, map links, walking evaluation, dates. |
 | `src/App.tsx` | Main UI: trip list, day timeline, photos, flights, notepad. |
-| `Dockerfile`, `docker-compose.yml` | Container build and runtime. |
+| `docker/Dockerfile`, `docker/docker-compose.*.yml` | Container build and runtime. |
 
 ## Endpoints
 
@@ -61,15 +61,17 @@ Every `/api/*` path except `/api/auth/*` must pass the session check before its 
 
 ## Deployment
 
-`Dockerfile`:
-- Multi-stage build on `node:24-alpine`.
+`docker/Dockerfile`:
+- Multi-stage build on `node:24-alpine` (`base`, `dev`, `build`, `prod`).
 - Runtime ENV: `PORT=4187`, `TRIP_HOST=0.0.0.0`, `TRIP_DATABASE_PATH=/data/trips.sqlite`, `TRIP_COOKIE_SECURE=1`.
 - Runs as `USER node`. The healthcheck calls `/api/auth/status`. CMD is `node server.mjs`.
-- Runtime COPY list: `dist`, `package.json`, `route-api.mjs`, `oidc.mjs`, `server.mjs`, `ai-crypto.mjs`, `ai-skills.mjs`, `ai-providers.mjs`, `ai-assistant.mjs`, `src/dto/trip-workspace.dto.ts`, `src/services/date.service.ts`, `src/services/trip.service.ts`, and the five `.github/skills/<name>/SKILL.md` files that `ai-skills.mjs` allows. Any new runtime import of a repo file (root `.mjs` or `src/`) must be added here.
+- Runtime COPY list: `dist`, `package.json`, `route-api.mjs`, `oidc.mjs`, `server.mjs`, `ai-crypto.mjs`, `ai-skills.mjs`, `ai-providers.mjs`, `ai-assistant.mjs`, `src/dto/trip-workspace.dto.ts`, `src/services/date.service.ts`, `src/services/trip.service.ts`, and the five `.agents/skills/<name>/SKILL.md` files that `ai-skills.mjs` allows. Any new runtime import of a repo file (root `.mjs` or `src/`) must be added here.
 - AI settings have no environment variables. They live in SQLite.
 
-`docker-compose.yml`:
-- Image from `TRIP_IMAGE`, published to GHCR by `.github/workflows/publish-image.yml`.
+`docker/docker-compose.*.yml`:
+- `docker-compose.base.yml`: Common environment variables and container definitions.
+- `docker-compose.dev.yml`: Local hot-reloading dev container (port 5173).
+- `docker-compose.prod.yml`: Production container (image from `TRIP_IMAGE`, published to GHCR by `.github/workflows/publish-image.yml`).
 - `user: "1026:100"`, volume `./data:/data`, port `4187:4187`, `read_only: true`, `tmpfs: /tmp`, `cap_drop: ALL`, `no-new-privileges`.
 - `TRIP_OIDC_*` values pass through with empty defaults. The container starts without them, but SSO stays unconfigured. `AMAP_API_KEY`, `AMAP_WEB_KEY`, and `TRIP_TRUST_PROXY` are optional. Only variables listed under `environment` reach the container.
 
@@ -91,7 +93,7 @@ Every `/api/*` path except `/api/auth/*` must pass the session check before its 
 | `NODE_ENV` | `route-api.mjs` | `production` forces the Secure cookie flag. |
 | `AMAP_API_KEY` | `/api/map-config` | AMap JS key. Returned only to authenticated sessions. |
 | `AMAP_WEB_KEY` | `/api/walk` | AMap Web service key. Server-side only. |
-| `TRIP_IMAGE` | `docker-compose.yml` | Container image reference. |
+| `TRIP_IMAGE` | `docker/docker-compose.prod.yml` | Container image reference. |
 
 ## Map providers
 

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,7 +11,9 @@ export const aiSkillNames = [
   'trip-photo-album',
 ]
 
-const skillsRoot = fileURLToPath(new URL('./.github/skills/', import.meta.url))
+const agentsSkillsRoot = fileURLToPath(new URL('./.agents/skills/', import.meta.url))
+const legacySkillsRoot = fileURLToPath(new URL('./.github/skills/', import.meta.url))
+const skillsRoot = existsSync(agentsSkillsRoot) ? agentsSkillsRoot : legacySkillsRoot
 const maxSkillCharacters = 12000
 
 function stripFrontmatter(text) {

@@ -24,21 +24,35 @@
 
 4. 開啟終端機顯示的本機網址。
 
-## Docker Compose 啟動
+## Docker 啟動
 
-在 `.env` 設定 Synology SSO 參數（見下方「Synology 登入設定」），並確認 `TRIP_IMAGE` 指向要使用的映像，例如 `ghcr.io/jontcont/travel-site:latest`。`docker-compose.yml` 只會把列在 `environment` 的變數傳入容器，新增設定時請一併加入。接著執行：
+Docker 設定檔統一維護於 `docker/` 目錄下：
+- `docker/Dockerfile`（包含 `base`、`dev`、`build`、`prod` 多階段，預設產出 `prod`）
+- `docker/docker-compose.base.yml`（共用基礎服務與環境變數定義）
+- `docker/docker-compose.dev.yml`（開發環境，支援程式碼熱重載與本機偵錯，預設埠 `5173`）
+- `docker/docker-compose.prod.yml`（生產環境，啟用唯讀檔案系統與安全限制，預設埠 `4187`）
+
+### 生產環境（Production）
+
+在 `.env` 設定 Synology SSO 參數（見下方「Synology 登入設定」），並確認 `TRIP_IMAGE` 指向要使用的映像，例如 `ghcr.io/jontcont/travel-site:latest`。環境變數若有異動，請同步維護於 `docker/docker-compose.base.yml`。接著執行：
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose -f docker/docker-compose.prod.yml pull
+docker compose -f docker/docker-compose.prod.yml up -d
 ```
-
-`AMAP_API_KEY` 用於開啟高德 LightMap 的步行導航連結，建議在高德控制台限制可使用的網域。目前網站沒有步行檢查按鈕，行程中的交通線都會標示「移動時間尚未驗證」。伺服器仍保留 `/api/walk` 端點，查詢路線需另外設定高德 Web 服務 Key `AMAP_WEB_KEY`；JavaScript API Key 不能取代它。詳見 [walkable-map-routing](.github/skills/walkable-map-routing/SKILL.md)。
 
 停止服務：
 
 ```bash
-docker compose down
+docker compose -f docker/docker-compose.prod.yml down
+```
+
+### 開發環境（Development）
+
+使用 Docker 容器執行本機開發伺服器（熱重載）：
+
+```bash
+docker compose -f docker/docker-compose.dev.yml up --build
 ```
 
 ## Synology 登入設定
@@ -47,7 +61,7 @@ docker compose down
 
 1. 在 DSM 的 SSO Server 新增一個 OpenID Connect 用戶端。Redirect URI 必須與 `.env` 的 `TRIP_OIDC_REDIRECT_URI` 完全相同，例如 `https://<旅程網域>/api/auth/oidc/callback`。
 2. 把用戶端 ID 與密鑰填入 `TRIP_OIDC_CLIENT_ID`、`TRIP_OIDC_CLIENT_SECRET`。`TRIP_OIDC_ISSUER` 填 `https://<NAS 網域>/webman/sso`。密鑰只放在 `.env`，不要提交到 git。
-3. 重新啟動容器：`docker compose up -d`。
+3. 重新啟動容器：`docker compose -f docker/docker-compose.prod.yml up -d`。
 
 登入後的角色：
 
@@ -73,7 +87,7 @@ docker compose down
   - 檢查衝突：列出行程中可能的時間或安排問題，只顯示結果，不會修改資料。
   - 整理記事本：預覽後才會覆蓋記事本。
 - 一般使用者（DSM 一般使用者與訪客通行碼）：只能在管理員開放的旅程使用「詢問」，可針對行程與記事本提問，回答只顯示在畫面上，不會修改行程。管理員在各旅程的「設定」分頁勾選「開放 AI 助理詢問給一般使用者」即可開放，預設關閉。其餘三種功能僅限管理員使用。
-- AI 會參考 `.github/skills/` 內的 travel-plan-foundation、itinerary-timeline、walkable-map-routing、travel-record-writing、trip-photo-album 等 skill 作為指引。Docker 映像會包含這五個 `SKILL.md`。
+- AI 會參考 `.agents/skills/` 內的 travel-plan-foundation、itinerary-timeline、walkable-map-routing、travel-record-writing、trip-photo-album 等 skill 作為指引。Docker 映像會包含這五個 `SKILL.md`。
 
 資料與金鑰：
 

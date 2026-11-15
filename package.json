@@ -9,7 +9,10 @@
     "lint": "oxlint",
     "test": "node --test tests/*.test.mjs",
     "start": "node server.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "docker:dev": "docker compose -f docker/docker-compose.dev.yml up",
+    "docker:prod": "docker compose -f docker/docker-compose.prod.yml up -d",
+    "docker:build": "docker build -f docker/Dockerfile --target prod -t travel-site ."
   },
   "dependencies": {
     "react": "^19.2.8",
