@@ -166,12 +166,21 @@ const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpe
 function parseCoordinates(value: string | undefined): [number, number] | null {
   if (!value) return null
   const trimmed = value.trim()
-  if (!/^-?\d{1,3}(?:\.\d{1,6})?,-?\d{1,2}(?:\.\d{1,6})?$/.test(trimmed)) {
+  if (!/^-?\d{1,3}(?:\.\d{1,6})?\s*,\s*-?\d{1,3}(?:\.\d{1,6})?$/.test(trimmed)) {
     return null
   }
-  const [lng, lat] = trimmed.split(',').map(Number)
-  if (lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
-    return [lng, lat]
+  const [first, second] = trimmed.split(',').map((s) => Number(s.trim()))
+  if (Number.isNaN(first) || Number.isNaN(second)) return null
+
+  // Auto-detect Google Maps "lat, lng" format:
+  // On Earth, latitude cannot exceed 90. If second > 90, it MUST be longitude!
+  if (Math.abs(second) > 90 && Math.abs(second) <= 180 && Math.abs(first) <= 90) {
+    return [second, first]
+  }
+
+  // Standard "lng, lat" format
+  if (first >= -180 && first <= 180 && second >= -90 && second <= 90) {
+    return [first, second]
   }
   return null
 }
