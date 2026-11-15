@@ -4,14 +4,12 @@
 
 | Path | Role |
 |---|---|
-| `server.mjs` | HTTP server. Mounts the trip API, then the walk API, then static files from `dist/`. Sets `TRIP_COOKIE_SECURE=1` when the variable is unset. |
-| `route-api.mjs` | `createTripApi` (auth, workspace, notepad, map config, access codes) and `walkApi` (`POST /api/walk`). Exports `openTripDatabase`. |
-| `oidc.mjs` | Synology SSO (OIDC) client: config, discovery, PKCE, ID token verification, role mapping. Imported by `route-api.mjs`, so it must be in the Dockerfile COPY list. |
-| `ai-providers.mjs`, `ai-assistant.mjs`, `ai-skills.mjs`, `ai-crypto.mjs` | AI assistant and admin settings (provider catalog and HTTP adapters, trip prompts and result validation, the whitelisted skill loader, and AES-256-GCM helpers for the stored API key). Non-admin users may use only `ask` on trips with `aiAskEnabled`. Imported by `route-api.mjs`. `ai-assistant.mjs` also imports `src/services/trip.service.ts` and `date.service.ts`. All of them must be in the Dockerfile COPY list. |
-| `src/dto/trip-workspace.dto.ts` | Type guards for the workspace. Used by the client and the server. |
-| `src/models/` | Types for trips, stops, and walking legs. |
-| `src/services/` | Client services: auth, workspace load and save, map links, walking evaluation, dates. |
-| `src/App.tsx` | Main UI: trip list, day timeline, photos, flights, notepad. |
+| `apps/api/src/server.mjs` | HTTP server. Mounts the trip API, then the walk API, then static files from `dist/`. Sets `TRIP_COOKIE_SECURE=1` when the variable is unset. |
+| `apps/api/src/routes.mjs` | `createTripApi` (auth, workspace, notepad, map config, access codes) and `walkApi` (`POST /api/walk`). Exports `openTripDatabase`. |
+| `apps/api/src/oidc.mjs` | Synology SSO (OIDC) client: config, discovery, PKCE, ID token verification, role mapping. |
+| `apps/api/src/ai/` | AI assistant and admin settings (providers, assistant, skills loader, and AES-256-GCM crypto). |
+| `packages/shared/` | Shared domain DTOs (`trip-workspace.dto.ts`) and pure services (`trip.service.ts`, `date.service.ts`, `map.service.ts`, `walking.service.ts`). |
+| `apps/web/` | React 19 Frontend SPA (UI components, pages, Vite build). |
 | `docker/Dockerfile`, `docker/docker-compose.*.yml` | Container build and runtime. |
 
 ## Endpoints
@@ -64,8 +62,8 @@ Every `/api/*` path except `/api/auth/*` must pass the session check before its 
 `docker/Dockerfile`:
 - Multi-stage build on `node:24-alpine` (`base`, `dev`, `build`, `prod`).
 - Runtime ENV: `PORT=4187`, `TRIP_HOST=0.0.0.0`, `TRIP_DATABASE_PATH=/data/trips.sqlite`, `TRIP_COOKIE_SECURE=1`.
-- Runs as `USER node`. The healthcheck calls `/api/auth/status`. CMD is `node server.mjs`.
-- Runtime COPY list: `dist`, `package.json`, `route-api.mjs`, `oidc.mjs`, `server.mjs`, `ai-crypto.mjs`, `ai-skills.mjs`, `ai-providers.mjs`, `ai-assistant.mjs`, `src/dto/trip-workspace.dto.ts`, `src/services/date.service.ts`, `src/services/trip.service.ts`, and the five `.agents/skills/<name>/SKILL.md` files that `ai-skills.mjs` allows. Any new runtime import of a repo file (root `.mjs` or `src/`) must be added here.
+- Runs as `USER node`. The healthcheck calls `/api/auth/status`. CMD is `node apps/api/src/server.mjs`.
+- Runtime COPY list: `dist`, `packages/shared`, `apps/api/src` (`server.mjs`, `routes.mjs`, `oidc.mjs`, `ai/`), and the five `.agents/skills/<name>/SKILL.md` files that `ai-skills.mjs` allows. Any new runtime import of a repo file must be added here.
 - AI settings have no environment variables. They live in SQLite.
 
 `docker/docker-compose.*.yml`:

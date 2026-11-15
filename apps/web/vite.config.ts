@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
-import { createTripApi, openTripDatabase, walkApi } from './route-api.mjs'
+import { createTripApi, openTripDatabase, walkApi } from '../api/src/routes.mjs'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), ['TRIP_', 'AMAP_'])
@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => {
   const tripApi = createTripApi(tripDatabase)
 
   return {
+    server: {
+      port: 5173,
+    },
     plugins: [react(), {
       name: 'local-trip-data',
       configureServer(server) {

@@ -1,11 +1,20 @@
 # ==========================================
-# Base Stage: Install dependencies
+# Base Stage: Install pnpm & dependencies
 # ==========================================
 FROM node:24-alpine AS base
 
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY apps/web/package.json ./apps/web/package.json
+COPY apps/api/package.json ./apps/api/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 # ==========================================
 # Development Stage: Hot-reload development
@@ -18,9 +27,9 @@ ENV NODE_ENV=development \
 
 COPY . .
 
-EXPOSE 5173
+EXPOSE 5173 4187
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["pnpm", "dev", "--", "--host", "0.0.0.0"]
 
 # ==========================================
 # Build Stage: Compile production frontend
@@ -28,7 +37,7 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 FROM base AS build
 
 COPY . .
-RUN npm run build
+RUN pnpm build
 
 # ==========================================
 # Production Stage: Hardened, minimal runtime
@@ -42,11 +51,13 @@ ENV NODE_ENV=production \
     TRIP_DATABASE_PATH=/data/trips.sqlite \
     TRIP_COOKIE_SECURE=1
 
-COPY --from=build --chown=node:node /app/dist ./dist
-COPY --chown=node:node package.json route-api.mjs oidc.mjs server.mjs ai-crypto.mjs ai-skills.mjs ai-providers.mjs ai-assistant.mjs ./
-COPY --chown=node:node src/dto/trip-workspace.dto.ts ./src/dto/trip-workspace.dto.ts
-COPY --chown=node:node src/services/date.service.ts ./src/services/date.service.ts
-COPY --chown=node:node src/services/trip.service.ts ./src/services/trip.service.ts
+# Copy build artifacts and server code
+COPY --from=build --chown=node:node /app/apps/web/dist ./dist
+COPY --chown=node:node apps/api/src/server.mjs apps/api/src/routes.mjs apps/api/src/oidc.mjs ./apps/api/src/
+COPY --chown=node:node apps/api/src/ai ./apps/api/src/ai
+COPY --chown=node:node packages/shared ./packages/shared
+COPY --chown=node:node apps/api/package.json ./apps/api/package.json
+COPY --chown=node:node package.json pnpm-workspace.yaml ./
 COPY --chown=node:node .agents/skills/travel-plan-foundation/SKILL.md ./.agents/skills/travel-plan-foundation/SKILL.md
 COPY --chown=node:node .agents/skills/itinerary-timeline/SKILL.md ./.agents/skills/itinerary-timeline/SKILL.md
 COPY --chown=node:node .agents/skills/walkable-map-routing/SKILL.md ./.agents/skills/walkable-map-routing/SKILL.md
@@ -57,4 +68,4 @@ RUN mkdir -p /data && chown node:node /data
 USER node
 EXPOSE 4187
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["node", "-e", "fetch('http://127.0.0.1:4187/api/auth/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-CMD ["node", "server.mjs"]
+CMD ["node", "apps/api/src/server.mjs"]

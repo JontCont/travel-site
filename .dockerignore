@@ -1,9 +1,11 @@
 .git
 .playwright-mcp
 .vscode
-node_modules
+**/node_modules
+**/dist
 dist
 dist-ssr
 data
 .env*
 *.log
+.specs

@@ -15,13 +15,13 @@ How to make safe changes to the server, auth, storage, and deployment. The facts
 4. Keep secrets on the server. `AMAP_WEB_KEY` must never reach the client. `AMAP_API_KEY` is returned only to authenticated sessions. No key may be returned to an unauthenticated caller.
 4. Keep the fail-closed behavior. If SSO is not configured, login and data endpoints must keep returning 503. Apply the same pattern to any new required variable. `server.mjs` sets `TRIP_COOKIE_SECURE=1` when it is unset, so test local login with that default in mind.
 6. For storage changes: the workspace is one JSON row with no migration. Before you make the DTO stricter, check that existing rows still pass, because a stricter DTO can turn `GET /api/workspace` into a 500. If the shape must change, write the migration and its test first, and back up `data/trips.sqlite`.
-7. For deployment changes: if `server.mjs`, `route-api.mjs`, or `oidc.mjs` imports a new repo file (root `.mjs` or `src/`), add that file to the Dockerfile COPY list. Otherwise the container fails at startup. Keep compose and `.env.example` values as placeholders.
+7. For deployment changes: if `apps/api` imports a new repo file or package, add that file to the Dockerfile COPY list. Otherwise the container fails at startup. Keep compose and `.env.example` values as placeholders.
 8. Add tests in `tests/route-api.test.mjs` for the new route's 401 (no session), 403 (wrong role), and 503 (not configured) cases. Then run the checks in [validation.md](../project-reference/references/validation.md).
 
 ## Acceptance
 
 - A new data route returns 401 without a session and 403 for a viewer write, and a test covers both.
 - Missing SSO configuration still returns 503 from login and data endpoints.
-- `npm test` and `npm run build` pass.
-- Every new runtime import from `src/` in the server appears in the Dockerfile COPY list.
+- `pnpm test` and `pnpm run build` pass.
+- Every new runtime import in `apps/api` appears in the Dockerfile COPY list.
 - No real code, key, or passcode appears in the diff.

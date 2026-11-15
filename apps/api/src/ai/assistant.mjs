@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { loadAiSkills } from './ai-skills.mjs'
-import { AiInputError, AiOutputError, callAiProvider, parseJsonObject } from './ai-providers.mjs'
-import { isLocalDate, listDates } from './src/services/date.service.ts'
-import { defineTrip } from './src/services/trip.service.ts'
+import { loadAiSkills } from './skills.mjs'
+import { AiInputError, AiOutputError, callAiProvider, parseJsonObject } from './providers.mjs'
+import { isLocalDate, listDates, defineTrip } from '@travel/shared'
 
 export const aiAssistModes = ['generate_itinerary', 'suggest_day_stops', 'check_conflicts', 'tidy_notepad', 'ask']
 

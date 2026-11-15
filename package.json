@@ -1,31 +1,20 @@
 {
-  "name": "fuzhou-travel-planner",
+  "name": "travel-site-monorepo",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "pnpm --filter @travel/web dev",
+    "dev:api": "pnpm --filter @travel/api dev",
+    "build": "pnpm --filter @travel/web build",
     "lint": "oxlint",
     "test": "node --test tests/*.test.mjs",
-    "start": "node server.mjs",
-    "preview": "vite preview",
+    "start": "pnpm --filter @travel/api start",
     "docker:dev": "docker compose -f docker/docker-compose.dev.yml up",
     "docker:prod": "docker compose -f docker/docker-compose.prod.yml up -d",
     "docker:build": "docker build -f docker/Dockerfile --target prod -t travel-site ."
   },
-  "dependencies": {
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
-  },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
-    "oxlint": "^1.81.0",
-    "sass": "^1.105.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "oxlint": "^1.81.0"
   }
 }

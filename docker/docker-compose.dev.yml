@@ -10,20 +10,13 @@ services:
       target: dev
     ports:
       - "5173:5173"
+      - "4187:4187"
     environment:
       NODE_ENV: development
     volumes:
       - ../data:/data
-      - ../src:/app/src
+      - ../apps:/app/apps
+      - ../packages:/app/packages
       - ../tests:/app/tests
-      - ../index.html:/app/index.html
-      - ../vite.config.ts:/app/vite.config.ts
-      - ../server.mjs:/app/server.mjs
-      - ../route-api.mjs:/app/route-api.mjs
-      - ../oidc.mjs:/app/oidc.mjs
-      - ../ai-assistant.mjs:/app/ai-assistant.mjs
-      - ../ai-providers.mjs:/app/ai-providers.mjs
-      - ../ai-skills.mjs:/app/ai-skills.mjs
-      - ../ai-crypto.mjs:/app/ai-crypto.mjs
       - ../.agents:/app/.agents
-    command: npm run dev -- --host 0.0.0.0
+    command: pnpm dev -- --host 0.0.0.0

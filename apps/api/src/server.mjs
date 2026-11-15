@@ -2,12 +2,17 @@ import { createReadStream, existsSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { extname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createTripApi, openTripDatabase, walkApi } from './route-api.mjs'
+import { createTripApi, openTripDatabase, walkApi } from './routes.mjs'
 
-const root = fileURLToPath(new URL('.', import.meta.url))
-const distDirectory = resolve(root, 'dist')
+const distCandidates = [
+  resolve(fileURLToPath(new URL('.', import.meta.url)), 'dist'),
+  resolve(fileURLToPath(new URL('..', import.meta.url)), 'dist'),
+  resolve(fileURLToPath(new URL('../../web/dist', import.meta.url))),
+  resolve(fileURLToPath(new URL('../../../web/dist', import.meta.url))),
+]
+const distDirectory = distCandidates.find((dir) => existsSync(resolve(dir, 'index.html'))) ?? distCandidates[0]
 const indexPath = resolve(distDirectory, 'index.html')
-if (!existsSync(indexPath)) throw new Error('找不到 dist/index.html；請先執行 npm run build。')
+if (!existsSync(indexPath)) throw new Error('找不到 dist/index.html；請先執行 pnpm build。')
 
 const database = openTripDatabase()
 if (process.env.TRIP_COOKIE_SECURE === undefined) process.env.TRIP_COOKIE_SECURE = '1'

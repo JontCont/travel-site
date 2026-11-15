@@ -11,9 +11,21 @@ export const aiSkillNames = [
   'trip-photo-album',
 ]
 
-const agentsSkillsRoot = fileURLToPath(new URL('./.agents/skills/', import.meta.url))
-const legacySkillsRoot = fileURLToPath(new URL('./.github/skills/', import.meta.url))
-const skillsRoot = existsSync(agentsSkillsRoot) ? agentsSkillsRoot : legacySkillsRoot
+function findSkillsRoot() {
+  const candidates = [
+    fileURLToPath(new URL('../../../../.agents/skills/', import.meta.url)),
+    fileURLToPath(new URL('../../../.agents/skills/', import.meta.url)),
+    fileURLToPath(new URL('../../.agents/skills/', import.meta.url)),
+    fileURLToPath(new URL('./.agents/skills/', import.meta.url)),
+    fileURLToPath(new URL('../../../../.github/skills/', import.meta.url)),
+  ]
+  for (const c of candidates) {
+    if (existsSync(c)) return c
+  }
+  return candidates[0]
+}
+
+const skillsRoot = findSkillsRoot()
 const maxSkillCharacters = 12000
 
 function stripFrontmatter(text) {

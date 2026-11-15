@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
-import { createTripApi, walkApi } from '../route-api.mjs'
-import { defineTrip } from '../src/services/trip.service.ts'
+import { createTripApi, walkApi } from '../apps/api/src/routes.mjs'
+import { defineTrip } from '../packages/shared/src/services/trip.service.ts'
 import { createMockSynologyOidc, oidcTestConfig, requestApi, synologyLogin } from './helpers/mock-synology-oidc.mjs'
 
 async function request(body) {
@@ -215,7 +215,7 @@ test('serves the AMap JavaScript API key only to authenticated sessions', async 
 })
 
 test('uses the destination rather than an entire transfer description in AMap place searches', async () => {
-  const { buildAmapPlaceSearchUrl } = await import('../src/services/map.service.ts')
+  const { buildAmapPlaceSearchUrl } = await import('../packages/shared/src/services/map.service.ts')
   const url = new URL(buildAmapPlaceSearchUrl(
     '福州長樂機場 → 桔E酒店(福州三坊七巷东街口地铁站店)',
     '福州',

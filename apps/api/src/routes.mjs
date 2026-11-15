@@ -3,7 +3,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isTripWorkspaceDto } from './src/dto/trip-workspace.dto.ts'
+import { isTripWorkspaceDto } from '@travel/shared'
 import {
   OidcError,
   createAuthorizationRequest,
@@ -13,8 +13,8 @@ import {
   readOidcConfig,
   resolveOidcIdentity,
 } from './oidc.mjs'
-import { decryptSecret, encryptSecret, readSecretKey } from './ai-crypto.mjs'
-import { parseAssistRequest, runAiAssist } from './ai-assistant.mjs'
+import { decryptSecret, encryptSecret, readSecretKey } from './ai/crypto.mjs'
+import { parseAssistRequest, runAiAssist } from './ai/assistant.mjs'
 import {
   AiInputError,
   AiOutputError,
@@ -22,10 +22,10 @@ import {
   aiProviderOptions,
   callAiProvider,
   parseAiSettingsInput,
-} from './ai-providers.mjs'
+} from './ai/providers.mjs'
 
 const coordinatePattern = /^-?\d{1,3}(?:\.\d{1,6})?,-?\d{1,2}(?:\.\d{1,6})?$/
-const defaultDatabasePath = fileURLToPath(new URL('./data/trips.sqlite', import.meta.url))
+const defaultDatabasePath = process.env.TRIP_DATABASE_PATH ?? fileURLToPath(new URL('../../../data/trips.sqlite', import.meta.url))
 const sessionCookie = 'trip_session'
 const sessionDurationMonths = 6
 const oidcTransactionMinutes = 10

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildGoogleDirectionsUrl, buildTripMapSearchUrl, isChinaTrip } from '../src/services/map.service.ts'
+import { buildGoogleDirectionsUrl, buildTripMapSearchUrl, isChinaTrip } from '../packages/shared/src/services/map.service.ts'
 
 test('builds Google directions links without computed distance', () => {
   const url = new URL(buildGoogleDirectionsUrl('萬座毛', '古宇利島', 'transit'))

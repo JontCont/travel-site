@@ -1,0 +1,25 @@
+{
+  "name": "@travel/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "@travel/shared": "workspace:*",
+    "@travel/api": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "sass": "^1.105.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  }
+}

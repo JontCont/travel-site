@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
-import { createAuthorizationRequest, oidcRoleFor, readOidcConfig } from '../oidc.mjs'
-import { createTripApi } from '../route-api.mjs'
+import { createAuthorizationRequest, oidcRoleFor, readOidcConfig } from '../apps/api/src/oidc.mjs'
+import { createTripApi } from '../apps/api/src/routes.mjs'
 import { createMockSynologyOidc, oidcTestConfig, requestApi, synologyLogin } from './helpers/mock-synology-oidc.mjs'
 
 const adminClaims = { sub: 'sub-alice', username: 'alice', groups: ['administrators'] }

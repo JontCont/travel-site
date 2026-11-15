@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
-import { createTripApi } from '../route-api.mjs'
-import { decryptSecret, encryptSecret, readSecretKey } from '../ai-crypto.mjs'
-import { aiSkillNames, loadAiSkills } from '../ai-skills.mjs'
-import { normalizeAssistResult, parseAssistRequest, runAiAssist } from '../ai-assistant.mjs'
+import { createTripApi } from '../apps/api/src/routes.mjs'
+import { decryptSecret, encryptSecret, readSecretKey } from '../apps/api/src/ai/crypto.mjs'
+import { aiSkillNames, loadAiSkills } from '../apps/api/src/ai/skills.mjs'
+import { normalizeAssistResult, parseAssistRequest, runAiAssist } from '../apps/api/src/ai/assistant.mjs'
 import {
   AiInputError,
   AiOutputError,
@@ -12,8 +12,8 @@ import {
   callAiProvider,
   parseAiSettingsInput,
   parseJsonObject,
-} from '../ai-providers.mjs'
-import { defineTrip } from '../src/services/trip.service.ts'
+} from '../apps/api/src/ai/providers.mjs'
+import { defineTrip } from '../packages/shared/src/services/trip.service.ts'
 import { createMockSynologyOidc, oidcTestConfig, requestApi, synologyLogin } from './helpers/mock-synology-oidc.mjs'
 
 const secret = 'test-secret-key-0123456789abcdef0123456789'
