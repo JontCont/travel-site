@@ -47,7 +47,7 @@ type MapStyleKey = 'osm' | 'dark' | 'satellite' | 'hot'
 
 const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpecification }> = {
   osm: {
-    name: '🗺 標準街道 (OSM - 免Key)',
+    name: '🗺 標準街道 (OSM)',
     style: {
       version: 8,
       sources: {
@@ -72,7 +72,7 @@ const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpe
     },
   },
   dark: {
-    name: '🌙 深色夜間 (Dark Canvas - 免Key)',
+    name: '🌙 深色夜間 (Dark Mode)',
     style: {
       version: 8,
       sources: {
@@ -112,7 +112,7 @@ const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpe
     },
   },
   satellite: {
-    name: '🛰 衛星空照 (Satellite - 免Key)',
+    name: '🛰 衛星空照 (Satellite)',
     style: {
       version: 8,
       sources: {
@@ -137,7 +137,7 @@ const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpe
     },
   },
   hot: {
-    name: '🌿 暖色人道 (OSM HOT - 免Key)',
+    name: '🌿 暖色街道 (OSM HOT)',
     style: {
       version: 8,
       sources: {
