@@ -25,6 +25,8 @@ type Config struct {
 	TrustProxy   bool
 	AmapAPIKey   string
 	AmapWebKey   string
+	AdminCode    string
+	ViewCode     string
 	Oidc         OidcConfig
 }
 
@@ -116,6 +118,8 @@ func LoadConfig() Config {
 		TrustProxy:   trustProxy,
 		AmapAPIKey:   strings.TrimSpace(os.Getenv("AMAP_API_KEY")),
 		AmapWebKey:   strings.TrimSpace(os.Getenv("AMAP_WEB_KEY")),
+		AdminCode:    strings.TrimSpace(os.Getenv("TRIP_ADMIN_CODE")),
+		ViewCode:     strings.TrimSpace(os.Getenv("TRIP_VIEW_CODE")),
 		Oidc:         LoadOidcConfig(),
 	}
 }

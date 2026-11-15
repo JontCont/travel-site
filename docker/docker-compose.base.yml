@@ -4,13 +4,6 @@ services:
     init: true
     restart: unless-stopped
     stop_grace_period: 30s
-    environment:
-      TRIP_OIDC_ISSUER: ${TRIP_OIDC_ISSUER:-}
-      TRIP_OIDC_CLIENT_ID: ${TRIP_OIDC_CLIENT_ID:-}
-      TRIP_OIDC_CLIENT_SECRET: ${TRIP_OIDC_CLIENT_SECRET:-}
-      TRIP_OIDC_REDIRECT_URI: ${TRIP_OIDC_REDIRECT_URI:-}
-      TRIP_OIDC_ADMIN_USERS: ${TRIP_OIDC_ADMIN_USERS:-}
-      TRIP_OIDC_ADMIN_GROUP: ${TRIP_OIDC_ADMIN_GROUP:-}
-      TRIP_TRUST_PROXY: ${TRIP_TRUST_PROXY:-}
-      AMAP_API_KEY: ${AMAP_API_KEY:-}
-      AMAP_WEB_KEY: ${AMAP_WEB_KEY:-}
+    env_file:
+      - path: ../.env
+        required: false

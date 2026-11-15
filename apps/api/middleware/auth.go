@@ -107,7 +107,7 @@ func RequireAuth(db *database.DB, cfg config.Config) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if !cfg.Oidc.Configured {
+		if !cfg.Oidc.Configured && cfg.AdminCode == "" {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "NAS 尚未設定 Synology 登入。"})
 			c.Abort()
 			return
