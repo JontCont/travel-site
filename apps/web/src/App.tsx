@@ -14,6 +14,7 @@ import {
   type TripWorkspace,
 } from '@travel/shared'
 import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
+import { CreateTripModal } from './CreateTripModal'
 
 const JsonEditorPanel = lazy(() => import('./JsonEditorPanel').then((m) => ({ default: m.JsonEditorPanel })))
 const TripMapPanel = lazy(() => import('./TripMapPanel').then((m) => ({ default: m.TripMapPanel })))
@@ -429,6 +430,7 @@ function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
+  const [createTripOpen, setCreateTripOpen] = useState(false)
   const [mapApiKey, setMapApiKey] = useState('')
   const [mapConfigError, setMapConfigError] = useState('')
   const [addressCopyFeedback, setAddressCopyFeedback] = useState<{ stopId: string; status: 'copied' | 'failed' } | null>(null)
@@ -601,6 +603,19 @@ function App() {
     setTab('itinerary')
     setEditing(null)
     setMobileNavOpen(false)
+  }
+
+  function handleCreateTrip(newTrip: Trip) {
+    if (authRole !== 'admin' || !workspace) return
+    setWorkspace({
+      ...workspace,
+      trips: [...workspace.trips, newTrip],
+      activeTripId: newTrip.id,
+    })
+    setDay(newTrip.startDate)
+    setTab('itinerary')
+    setEditing(null)
+    setCreateTripOpen(false)
   }
 
 
@@ -783,7 +798,7 @@ function App() {
               <button className={tab === 'timeline' ? 'selected' : ''} onClick={() => setTab('timeline')}>旅程時間軸</button>
               <button className={tab === 'archive' ? 'selected' : ''} onClick={() => setTab('archive')}>封存</button>
             </nav>
-            <div className="section-heading"><div><span className="overline">旅程總覽 · {workspace.trips.length} 趟</span><h2>每一趟旅程，都從這裡開始。</h2><p className="overview-caption">管理你的出國計畫，選取旅程以查看每日安排。</p></div></div>
+            <div className="section-heading"><div><span className="overline">旅程總覽 · {workspace.trips.length} 趟</span><h2>每一趟旅程，都從這裡開始。</h2><p className="overview-caption">管理你的出國計畫，選取旅程以查看每日安排。</p></div>{authRole === 'admin' && <button type="button" className="small-action" onClick={() => setCreateTripOpen(true)}>＋ 新增旅程</button>}</div>
             {tab === 'overview' && renderTripCards(currentTrips)}
             {tab === 'timeline' && <div className="journey-timeline">
               {sortTripsNearToFar(workspace.trips, statusTime).map((item) => {
@@ -1006,6 +1021,13 @@ function App() {
           </>}
         </div>
       </main>
+      {createTripOpen && authRole === 'admin' && (
+        <CreateTripModal
+          defaultTimeZone={trip.timeZone}
+          onClose={() => setCreateTripOpen(false)}
+          onCreate={handleCreateTrip}
+        />
+      )}
     </div>
   )
 }

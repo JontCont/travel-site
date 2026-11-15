@@ -216,3 +216,18 @@ test('reports malformed browser backups without replacing them', () => {
     'travel-planner-v1': JSON.stringify({ trips: [], activeTripId: 'missing' }),
   })), /格式不正確/)
 })
+
+test('defines a past trip with generated day keys and classifies it as ended', () => {
+  const pastTrip = defineTrip({
+    id: 'tokyo-2023',
+    title: '2023 東京賞櫻',
+    destination: '東京',
+    country: '日本',
+    startDate: '2023-04-01',
+    endDate: '2023-04-03',
+    timeZone: 'Asia/Tokyo',
+  })
+  assert.deepEqual(Object.keys(pastTrip.days), ['2023-04-01', '2023-04-02', '2023-04-03'])
+  assert.equal(getTripStatus(pastTrip.startDate, pastTrip.endDate, pastTrip.timeZone, new Date('2026-11-15T12:00:00Z')), 'ended')
+  assert.equal(isTripWorkspaceDto({ trips: [pastTrip], activeTripId: pastTrip.id }), true)
+})
