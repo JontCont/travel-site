@@ -826,6 +826,82 @@
   fill: #cadbc9;
 }
 
+.maplibre-gl-canvas-holder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.maplibre-marker {
+  cursor: pointer;
+}
+
+.maplibre-marker.stop {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #2e6647;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  color: white;
+  font-weight: 700;
+  font-size: 11px;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.maplibre-marker.stop:hover,
+.maplibre-marker.stop.active {
+  background: #17382e;
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px rgba(46, 102, 71, 0.4), 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 5;
+}
+
+.maplibre-marker.hotel {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #b85d38;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  color: white;
+  font-size: 13px;
+}
+
+.maplibre-marker.temp-pin .pulse-dot {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e63946;
+  border: 2px solid white;
+  box-shadow: 0 0 0 rgba(230, 57, 70, 0.6);
+  animation: markerPulse 1.2s infinite;
+}
+
+@keyframes markerPulse {
+  0% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.7); }
+  70% { box-shadow: 0 0 0 14px rgba(230, 57, 70, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0); }
+}
+
+.map-style-select {
+  padding: 6px 12px;
+  border: 1px solid #dce5dc;
+  border-radius: 7px;
+  background: white;
+  color: #274d37;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline-color: #2e6647;
+}
+
 .map-stop-popup {
   position: absolute;
   bottom: 18px;

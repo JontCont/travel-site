@@ -1,14 +1,6 @@
-import { useState, useMemo, useCallback } from 'react'
-import {
-  ComposableMap,
-  Geographies,
-  Geography,
-  Marker,
-  Line,
-  ZoomableGroup,
-  useMapContext,
-} from 'react-simple-maps'
-import geoData from 'world-atlas/countries-110m.json'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import * as maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import {
   buildTripMapSearchUrl,
   listDates,
@@ -43,12 +35,90 @@ const DESTINATION_COORDS: Record<string, [number, number]> = {
   澳門: [113.5439, 22.1987],
   新加坡: [103.8198, 1.3521],
   曼谷: [100.5018, 13.7563],
+  舊金山: [-122.4194, 37.7749],
+  紐約: [-74.006, 40.7128],
   倫敦: [-0.1276, 51.5074],
   巴黎: [2.3522, 48.8566],
-  紐約: [-74.006, 40.7128],
-  舊金山: [-122.4194, 37.7749],
   羅馬: [12.4964, 41.9028],
   雪梨: [151.2093, -33.8688],
+}
+
+type MapStyleKey = 'voyager' | 'dark' | 'osm'
+
+const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpecification }> = {
+  voyager: {
+    name: '🌿 旅行亮色 (Voyager)',
+    style: {
+      version: 8,
+      sources: {
+        'carto-voyager': {
+          type: 'raster',
+          tiles: [
+            'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+          ],
+          tileSize: 256,
+          attribution: '&copy; OpenStreetMap contributors, &copy; CARTO',
+        },
+      },
+      layers: [
+        {
+          id: 'carto-voyager-layer',
+          type: 'raster',
+          source: 'carto-voyager',
+          minzoom: 0,
+          maxzoom: 20,
+        },
+      ],
+    },
+  },
+  dark: {
+    name: '🌙 深色夜間 (Dark Mode)',
+    style: {
+      version: 8,
+      sources: {
+        'carto-dark': {
+          type: 'raster',
+          tiles: [
+            'https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png',
+          ],
+          tileSize: 256,
+          attribution: '&copy; OpenStreetMap contributors, &copy; CARTO',
+        },
+      },
+      layers: [
+        {
+          id: 'carto-dark-layer',
+          type: 'raster',
+          source: 'carto-dark',
+          minzoom: 0,
+          maxzoom: 20,
+        },
+      ],
+    },
+  },
+  osm: {
+    name: '🗺 標準街道 (OSM)',
+    style: {
+      version: 8,
+      sources: {
+        'osm-tiles': {
+          type: 'raster',
+          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: '&copy; OpenStreetMap contributors',
+        },
+      },
+      layers: [
+        {
+          id: 'osm-layer',
+          type: 'raster',
+          source: 'osm-tiles',
+          minzoom: 0,
+          maxzoom: 19,
+        },
+      ],
+    },
+  },
 }
 
 function parseCoordinates(value: string | undefined): [number, number] | null {
@@ -64,44 +134,10 @@ function parseCoordinates(value: string | undefined): [number, number] | null {
   return null
 }
 
-interface MapClickHandlerProps {
-  active: boolean
-  onMapClick: (coords: [number, number]) => void
-}
-
-function MapClickHandler({ active, onMapClick }: MapClickHandlerProps) {
-  const { projection } = useMapContext()
-
-  if (!active) return null
-
-  return (
-    <rect
-      width="100%"
-      height="100%"
-      fill="transparent"
-      style={{ cursor: 'crosshair' }}
-      onClick={(e) => {
-        const svg = e.currentTarget.ownerSVGElement
-        if (!svg || !projection) return
-        const pt = svg.createSVGPoint()
-        pt.x = e.clientX
-        pt.y = e.clientY
-        const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse())
-        const inverted = projection.invert?.([svgP.x, svgP.y])
-        if (inverted && !isNaN(inverted[0]) && !isNaN(inverted[1])) {
-          onMapClick([
-            Number(inverted[0].toFixed(5)),
-            Number(inverted[1].toFixed(5)),
-          ])
-        }
-      }}
-    />
-  )
-}
-
 export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps) {
   const tripDates = useMemo(() => listDates(trip.startDate, trip.endDate), [trip.startDate, trip.endDate])
   const [selectedDay, setSelectedDay] = useState<string>('all')
+  const [mapStyleKey, setMapStyleKey] = useState<MapStyleKey>('voyager')
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null)
   const [isMarkingMode, setIsMarkingMode] = useState(false)
   const [markedCoords, setMarkedCoords] = useState<[number, number] | null>(null)
@@ -115,7 +151,13 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
   const [newStopAddress, setNewStopAddress] = useState('')
   const [formSuccessMessage, setFormSuccessMessage] = useState('')
 
-  // Gather all stops for display
+  // Map references
+  const mapContainerRef = useRef<HTMLDivElement | null>(null)
+  const mapRef = useRef<maplibregl.Map | null>(null)
+  const markersRef = useRef<maplibregl.Marker[]>([])
+  const tempMarkerRef = useRef<maplibregl.Marker | null>(null)
+
+  // Gather all stops
   const allStopsWithMeta = useMemo(() => {
     const list: Array<{ stop: Stop; dayDate: string; dayIndex: number; order: number }> = []
     tripDates.forEach((date, dayIndex) => {
@@ -127,13 +169,13 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
     return list
   }, [tripDates, trip.days])
 
-  // Filtered stops based on selected day
+  // Filtered stops
   const displayedStops = useMemo(() => {
     if (selectedDay === 'all') return allStopsWithMeta
     return allStopsWithMeta.filter((item) => item.dayDate === selectedDay)
   }, [allStopsWithMeta, selectedDay])
 
-  // Valid coordinate stops
+  // Stops with valid coords
   const mappedStops = useMemo(() => {
     return displayedStops
       .map((item) => {
@@ -143,78 +185,241 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
       .filter((item): item is NonNullable<typeof item> => item !== null)
   }, [displayedStops])
 
-  // Hotel location
+  // Hotel coords
   const hotelCoords = useMemo(() => parseCoordinates(trip.hotelCoordinates), [trip.hotelCoordinates])
 
-  // Calculate default map center
+  // Default center calculation
   const defaultCenter = useMemo<[number, number]>(() => {
-    // 1. If we have mapped stops, average their coordinates
     if (mappedStops.length > 0) {
       const sumLng = mappedStops.reduce((sum, s) => sum + s.coords[0], 0)
       const sumLat = mappedStops.reduce((sum, s) => sum + s.coords[1], 0)
       return [sumLng / mappedStops.length, sumLat / mappedStops.length]
     }
-    // 2. Hotel
     if (hotelCoords) {
       return hotelCoords
     }
-    // 3. Known destination
     for (const [key, coords] of Object.entries(DESTINATION_COORDS)) {
       if (trip.destination.includes(key) || trip.title.includes(key)) {
         return coords
       }
     }
-    // 4. Default fallback: Tokyo / East Asia
     return [116.4074, 39.9042]
   }, [mappedStops, hotelCoords, trip.destination, trip.title])
 
-  const [mapCenter, setMapCenter] = useState<[number, number]>(defaultCenter)
-  const [zoom, setZoom] = useState<number>(mappedStops.length > 0 ? 8 : 4)
-
-  // Consecutive paths between stops on the same day
-  const pathLines = useMemo(() => {
-    const lines: Array<{ from: [number, number]; to: [number, number]; key: string }> = []
-    if (selectedDay !== 'all') {
-      for (let i = 0; i < mappedStops.length - 1; i++) {
-        lines.push({
-          from: mappedStops[i].coords,
-          to: mappedStops[i + 1].coords,
-          key: `line-${mappedStops[i].stop.id}-${mappedStops[i + 1].stop.id}`,
-        })
-      }
-    }
-    return lines
-  }, [mappedStops, selectedDay])
-
-  // Currently focused / active stop
+  // Focused stop detail
   const activeStopDetail = useMemo(() => {
     if (!selectedStopId) return null
     return allStopsWithMeta.find((item) => item.stop.id === selectedStopId) ?? null
   }, [allStopsWithMeta, selectedStopId])
 
-  // Handle map click
-  const handleMapClick = useCallback((coords: [number, number]) => {
-    setMarkedCoords(coords)
+  // Initialize MapLibre GL
+  useEffect(() => {
+    if (!mapContainerRef.current) return
 
-    // If we were waiting to mark an existing stop
-    if (pendingStopTargetId) {
-      const coordStr = `${coords[0]},${coords[1]}`
-      onUpdateTrip((prev) => {
-        const nextDays = { ...prev.days }
-        for (const [d, stops] of Object.entries(nextDays)) {
-          if (stops.some((s) => s.id === pendingStopTargetId)) {
-            nextDays[d] = stops.map((s) => (s.id === pendingStopTargetId ? { ...s, coordinates: coordStr } : s))
-            break
-          }
-        }
-        return { ...prev, days: nextDays }
-      })
-      setFormSuccessMessage(`✓ 已為景點設定座標：${coordStr}`)
-      setTimeout(() => setFormSuccessMessage(''), 3000)
-      setPendingStopTargetId(null)
-      setIsMarkingMode(false)
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: MAP_STYLES[mapStyleKey].style,
+      center: defaultCenter,
+      zoom: mappedStops.length > 0 ? 12 : 11,
+      minZoom: 1,
+      maxZoom: 19,
+    })
+
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right')
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left')
+
+    mapRef.current = map
+
+    return () => {
+      map.remove()
+      mapRef.current = null
     }
-  }, [pendingStopTargetId, onUpdateTrip])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Handle map style change
+  useEffect(() => {
+    if (!mapRef.current) return
+    mapRef.current.setStyle(MAP_STYLES[mapStyleKey].style)
+  }, [mapStyleKey])
+
+  // Update Route Polyline Layer
+  const updateRouteLine = useCallback(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const sourceId = 'route-source'
+    const layerId = 'route-layer'
+
+    if (map.getLayer(layerId)) map.removeLayer(layerId)
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+
+    if (mappedStops.length < 2) return
+
+    const coordinates = mappedStops.map((s) => s.coords)
+
+    map.addSource(sourceId, {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates,
+        },
+      },
+    })
+
+    map.addLayer({
+      id: layerId,
+      type: 'line',
+      source: sourceId,
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round',
+      },
+      paint: {
+        'line-color': '#2e6647',
+        'line-width': 4,
+        'line-dasharray': [2, 2],
+      },
+    })
+  }, [mappedStops])
+
+  // Re-render markers and route lines when mappedStops or map changes
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    // Clear existing markers
+    markersRef.current.forEach((m) => m.remove())
+    markersRef.current = []
+
+    // Hotel marker
+    if (hotelCoords) {
+      const el = document.createElement('div')
+      el.className = 'maplibre-marker hotel'
+      el.innerHTML = '<span class="pin-symbol">⌂</span>'
+      el.onclick = (e) => {
+        e.stopPropagation()
+        setSelectedStopId('hotel')
+      }
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat(hotelCoords)
+        .addTo(map)
+      markersRef.current.push(marker)
+    }
+
+    // Stop markers
+    mappedStops.forEach((item, idx) => {
+      const el = document.createElement('div')
+      el.className = `maplibre-marker stop ${selectedStopId === item.stop.id ? 'active' : ''}`
+      el.innerHTML = `<span class="pin-num">${idx + 1}</span>`
+      el.title = `${idx + 1}. ${item.stop.name} (${item.stop.time})`
+      el.onclick = (e) => {
+        e.stopPropagation()
+        setSelectedStopId(item.stop.id)
+      }
+
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat(item.coords)
+        .addTo(map)
+      markersRef.current.push(marker)
+    })
+
+    // If map is loaded, update polyline
+    if (map.isStyleLoaded()) {
+      updateRouteLine()
+    } else {
+      map.once('style.load', updateRouteLine)
+    }
+  }, [mappedStops, hotelCoords, selectedStopId, updateRouteLine])
+
+  // Map Click Listener for Marking mode
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const handleMapClick = (e: maplibregl.MapMouseEvent) => {
+      if (!isMarkingMode) return
+
+      const coords: [number, number] = [
+        Number(e.lngLat.lng.toFixed(5)),
+        Number(e.lngLat.lat.toFixed(5)),
+      ]
+      setMarkedCoords(coords)
+
+      // Add temporary marker
+      if (tempMarkerRef.current) tempMarkerRef.current.remove()
+      const el = document.createElement('div')
+      el.className = 'maplibre-marker temp-pin'
+      el.innerHTML = '<span class="pulse-dot"></span>'
+      tempMarkerRef.current = new maplibregl.Marker({ element: el })
+        .setLngLat(coords)
+        .addTo(map)
+
+      // If assigning to an existing stop
+      if (pendingStopTargetId) {
+        const coordStr = `${coords[0]},${coords[1]}`
+        onUpdateTrip((prev) => {
+          const nextDays = { ...prev.days }
+          for (const [d, stops] of Object.entries(nextDays)) {
+            if (stops.some((s) => s.id === pendingStopTargetId)) {
+              nextDays[d] = stops.map((s) => (s.id === pendingStopTargetId ? { ...s, coordinates: coordStr } : s))
+              break
+            }
+          }
+          return { ...prev, days: nextDays }
+        })
+        setFormSuccessMessage(`✓ 已為景點設定座標：${coordStr}`)
+        setTimeout(() => setFormSuccessMessage(''), 3000)
+        setPendingStopTargetId(null)
+        setIsMarkingMode(false)
+        if (tempMarkerRef.current) {
+          tempMarkerRef.current.remove()
+          tempMarkerRef.current = null
+        }
+      }
+    }
+
+    map.on('click', handleMapClick)
+    return () => {
+      map.off('click', handleMapClick)
+    }
+  }, [isMarkingMode, pendingStopTargetId, onUpdateTrip])
+
+  // Change cursor when marking mode toggles
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    map.getCanvas().style.cursor = isMarkingMode ? 'crosshair' : ''
+  }, [isMarkingMode])
+
+  // Reset view to bounds
+  const handleResetBounds = () => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (mappedStops.length > 1) {
+      const bounds = new maplibregl.LngLatBounds()
+      mappedStops.forEach((s) => bounds.extend(s.coords))
+      if (hotelCoords) bounds.extend(hotelCoords)
+      map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 1000 })
+    } else if (mappedStops.length === 1) {
+      map.flyTo({ center: mappedStops[0].coords, zoom: 14, duration: 1000 })
+    } else {
+      map.flyTo({ center: defaultCenter, zoom: 12, duration: 1000 })
+    }
+  }
+
+  // Pan to stop
+  const panToStop = (stop: Stop) => {
+    const coords = parseCoordinates(stop.coordinates)
+    setSelectedStopId(stop.id)
+    if (coords && mapRef.current) {
+      mapRef.current.flyTo({ center: coords, zoom: 15, duration: 1000 })
+    }
+  }
 
   // Save new marked stop
   const handleCreateMarkedStop = (e: React.FormEvent) => {
@@ -245,36 +450,28 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
 
     setNewStopName('')
     setNewStopAddress('')
-    setFormSuccessMessage(`✓ 景點「${newStop.name}」已成功新增至 ${prettyDate(newStopDay)}！`)
+    setFormSuccessMessage(`✓ 景點「${newStop.name}」已成功新增！`)
     setTimeout(() => setFormSuccessMessage(''), 4000)
     setIsMarkingMode(false)
     setMarkedCoords(null)
     setSelectedStopId(newStop.id)
-  }
-
-  // Pan to a specific stop
-  const panToStop = (stop: Stop) => {
-    const coords = parseCoordinates(stop.coordinates)
-    setSelectedStopId(stop.id)
-    if (coords) {
-      setMapCenter(coords)
-      setZoom(12)
+    if (tempMarkerRef.current) {
+      tempMarkerRef.current.remove()
+      tempMarkerRef.current = null
     }
   }
 
   return (
     <div className="trip-map-container">
-      {/* Map Control Header */}
+      {/* Header */}
       <div className="trip-map-header">
         <div className="trip-map-title">
-          <span className="overline">LOCATION MAP</span>
-          <h3>{trip.destination} · 地點標記地圖</h3>
-          <span className="map-badge">
-            已標記 {mappedStops.length} 個地點
-          </span>
+          <span className="overline">MAPLIBRE STREET MAP</span>
+          <h3>{trip.destination} · 街道級高精度地圖</h3>
+          <span className="map-badge">已標記 {mappedStops.length} 處地點</span>
         </div>
 
-        {/* Day selection tabs */}
+        {/* Day selection */}
         <div className="trip-map-days">
           <button
             type="button"
@@ -295,34 +492,27 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
           ))}
         </div>
 
-        {/* Zoom & Action Controls */}
+        {/* Style Selector & Controls */}
         <div className="trip-map-actions">
+          <select
+            className="map-style-select"
+            value={mapStyleKey}
+            onChange={(e) => setMapStyleKey(e.target.value as MapStyleKey)}
+          >
+            {Object.entries(MAP_STYLES).map(([key, item]) => (
+              <option key={key} value={key}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+
           <button
             type="button"
             className="map-btn"
-            onClick={() => setZoom((z) => Math.min(z * 1.5, 40))}
-            title="放大地圖"
+            onClick={handleResetBounds}
+            title="自動縮放對齊所有景點"
           >
-            ＋
-          </button>
-          <button
-            type="button"
-            className="map-btn"
-            onClick={() => setZoom((z) => Math.max(z / 1.5, 1))}
-            title="縮小地圖"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            className="map-btn"
-            onClick={() => {
-              setMapCenter(defaultCenter)
-              setZoom(mappedStops.length > 0 ? 8 : 4)
-            }}
-            title="重設視角"
-          >
-            ⌖ 重設
+            ⌖ 置中對齊
           </button>
 
           {authRole === 'admin' && (
@@ -332,6 +522,10 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
               onClick={() => {
                 setIsMarkingMode((m) => !m)
                 setPendingStopTargetId(null)
+                if (tempMarkerRef.current) {
+                  tempMarkerRef.current.remove()
+                  tempMarkerRef.current = null
+                }
               }}
             >
               {isMarkingMode ? '✕ 取消標記' : '⚲ 標記新地點'}
@@ -340,141 +534,25 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
         </div>
       </div>
 
-      {/* Marking Instructions Banner */}
+      {/* Marking Instructions */}
       {isMarkingMode && (
         <div className="map-instruction-banner">
           {pendingStopTargetId ? (
-            <>請直接點擊地圖上的任意位置，即可將該經緯度賦予選定景點。</>
+            <>請直接點擊地圖上的街道或建築位置，即可將該座標賦予選定景點。</>
           ) : (
-            <>點擊地圖上的任意位置進行標記，下方表單將自動填入經緯度以新增景點。</>
+            <>點擊地圖任意街道或建築位置進行標記，下方表單將自動填入經緯度以新增景點。</>
           )}
         </div>
       )}
 
       {/* Success Alert */}
-      {formSuccessMessage && (
-        <div className="map-success-alert">
-          {formSuccessMessage}
-        </div>
-      )}
+      {formSuccessMessage && <div className="map-success-alert">{formSuccessMessage}</div>}
 
-      {/* Main Map + Sidebar Workspace */}
+      {/* Main Map + Sidebar */}
       <div className="trip-map-body">
-        {/* SVG Map Canvas */}
+        {/* MapLibre WebGL Canvas Container */}
         <div className="trip-map-canvas">
-          <ComposableMap
-            projection="geoMercator"
-            projectionConfig={{ scale: 100 }}
-            width={800}
-            height={500}
-            style={{ width: '100%', height: '100%' }}
-          >
-            <ZoomableGroup
-              center={mapCenter}
-              zoom={zoom}
-              onMoveEnd={({ coordinates, zoom: newZoom }) => {
-                if (coordinates) setMapCenter(coordinates)
-                if (newZoom) setZoom(newZoom)
-              }}
-            >
-              {/* World Geographies */}
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <Geographies geography={geoData as any}>
-                {({ geographies }) =>
-                  geographies.map((geo) => (
-                    <Geography
-                      key={geo.rsmKey}
-                      geography={geo}
-                      fill="#dbe5da"
-                      stroke="#c2d4c0"
-                      strokeWidth={Math.max(0.2, 0.6 / Math.sqrt(zoom))}
-                      className="map-geography"
-                      style={{ outline: 'none' }}
-                    />
-                  ))
-                }
-              </Geographies>
-
-              {/* Sequential Path Lines between stops on selected day */}
-              {pathLines.map((line) => (
-                <Line
-                  key={line.key}
-                  from={line.from}
-                  to={line.to}
-                  stroke="#2e6647"
-                  strokeWidth={Math.max(1, 2.5 / zoom)}
-                  strokeDasharray={`${5 / zoom} ${3 / zoom}`}
-                  strokeLinecap="round"
-                />
-              ))}
-
-              {/* Hotel Marker if available */}
-              {hotelCoords && (
-                <Marker coordinates={hotelCoords}>
-                  <g
-                    transform={`scale(${1 / Math.max(0.5, zoom)})`}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => setSelectedStopId('hotel')}
-                  >
-                    <circle r={12} fill="#b85d38" stroke="#ffffff" strokeWidth={2} />
-                    <text textAnchor="middle" y={4} fontSize={11} fill="#ffffff" fontWeight="bold">
-                      ⌂
-                    </text>
-                  </g>
-                </Marker>
-              )}
-
-              {/* Stop Markers */}
-              {mappedStops.map((item, idx) => {
-                const isSelected = selectedStopId === item.stop.id
-                return (
-                  <Marker
-                    key={item.stop.id}
-                    coordinates={item.coords}
-                    onClick={() => setSelectedStopId(item.stop.id)}
-                  >
-                    <g
-                      transform={`scale(${1 / Math.max(0.5, zoom)})`}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      {isSelected && (
-                        <circle r={18} fill="none" stroke="#2e6647" strokeWidth={3} opacity={0.5} />
-                      )}
-                      <circle
-                        r={12}
-                        fill={isSelected ? '#143827' : '#2e6647'}
-                        stroke="#ffffff"
-                        strokeWidth={2}
-                      />
-                      <text
-                        textAnchor="middle"
-                        y={4}
-                        fontSize={11}
-                        fill="#ffffff"
-                        fontWeight="bold"
-                        fontFamily="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif"
-                      >
-                        {idx + 1}
-                      </text>
-                    </g>
-                  </Marker>
-                )
-              })}
-
-              {/* Click Pin Marker (when in marking mode) */}
-              {markedCoords && (
-                <Marker coordinates={markedCoords}>
-                  <g transform={`scale(${1 / Math.max(0.5, zoom)})`}>
-                    <circle r={7} fill="#e63946" stroke="#ffffff" strokeWidth={2} />
-                    <circle r={14} fill="none" stroke="#e63946" strokeWidth={2} strokeDasharray="3 2" />
-                  </g>
-                </Marker>
-              )}
-
-              {/* Map Click Listener */}
-              <MapClickHandler active={isMarkingMode} onMapClick={handleMapClick} />
-            </ZoomableGroup>
-          </ComposableMap>
+          <div ref={mapContainerRef} className="maplibre-gl-canvas-holder" />
 
           {/* Floating Selected Spot Card */}
           {activeStopDetail && (
@@ -516,20 +594,20 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
           )}
         </div>
 
-        {/* Sidebar: Spot List & Add Form */}
+        {/* Sidebar */}
         <aside className="trip-map-sidebar">
-          {/* New Spot Form when in Marking Mode */}
+          {/* New Spot Form */}
           {isMarkingMode && !pendingStopTargetId && (
             <form className="map-add-form" onSubmit={handleCreateMarkedStop}>
               <h4>⚲ 標記並新增景點</h4>
-              <p className="form-subtext">在左側地圖上點擊以獲取精確經緯度。</p>
+              <p className="form-subtext">在左側街道地圖上點擊以獲取精確經緯度。</p>
 
               <label>
                 景點名稱 *
                 <input
                   type="text"
                   required
-                  placeholder="例如：景山公園"
+                  placeholder="例如：故宮博物院"
                   value={newStopName}
                   onChange={(e) => setNewStopName(e.target.value)}
                 />
@@ -539,7 +617,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
                 經緯度 (經度,緯度)
                 <input
                   type="text"
-                  placeholder="點地圖自動填入"
+                  placeholder="點擊街道地圖自動填入"
                   value={markedCoords ? `${markedCoords[0]},${markedCoords[1]}` : ''}
                   onChange={(e) => {
                     const parsed = parseCoordinates(e.target.value)
@@ -587,7 +665,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
                 地址 (選填)
                 <input
                   type="text"
-                  placeholder="詳細地址"
+                  placeholder="詳細街道地址"
                   value={newStopAddress}
                   onChange={(e) => setNewStopAddress(e.target.value)}
                 />
@@ -603,6 +681,10 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
                   onClick={() => {
                     setIsMarkingMode(false)
                     setMarkedCoords(null)
+                    if (tempMarkerRef.current) {
+                      tempMarkerRef.current.remove()
+                      tempMarkerRef.current = null
+                    }
                   }}
                 >
                   取消
@@ -645,13 +727,9 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
 
                         <div className="spot-status-row">
                           {hasCoords ? (
-                            <span className="status-tag tagged">
-                              ✓ 已標記座標
-                            </span>
+                            <span className="status-tag tagged">✓ 已標記座標</span>
                           ) : (
-                            <span className="status-tag untagged">
-                              ✕ 尚無座標
-                            </span>
+                            <span className="status-tag untagged">✕ 尚無座標</span>
                           )}
 
                           {authRole === 'admin' && !hasCoords && (
