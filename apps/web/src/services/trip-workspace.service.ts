@@ -1,4 +1,4 @@
-import { isTripWorkspaceDto, type TripWorkspaceDto } from '../dto/trip-workspace.dto.ts'
+import { isTripWorkspaceDto, type TripWorkspaceDto } from '@travel/shared'
 
 const workspaceKey = 'travel-planner-v1'
 

@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import type { Stop, Trip, TripWorkspace } from './models/trip'
+import {
+  buildGoogleDirectionsUrl,
+  buildTripMapSearchUrl,
+  getMapApiKey,
+  getTripStatus,
+  isChinaTrip,
+  listDates,
+  routeModeLabels,
+  sortTripsNearToFar,
+  type RouteMode,
+  type Stop,
+  type Trip,
+  type TripStatus,
+  type TripWorkspace,
+} from '@travel/shared'
 import { AiAssistantPanel, AiSettingsPanel } from './AiPanels'
-import { getTripStatus, sortTripsNearToFar, type TripStatus } from './services/date.service'
-import { listDates } from './services/trip.service'
 import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
 import { getAiAvailability, getAiSettings } from './services/ai.service'
 import {
@@ -21,7 +33,6 @@ import {
   type AccessCodeUpdate,
   type AccessRole,
 } from './services/auth.service'
-import { buildGoogleDirectionsUrl, buildTripMapSearchUrl, getMapApiKey, isChinaTrip, routeModeLabels, type RouteMode } from './services/map.service'
 import './App.scss'
 
 function amapWalkingRoute(origin: string, destination: string, destinationName: string, key: string) {

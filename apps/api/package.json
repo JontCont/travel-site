@@ -2,16 +2,10 @@
   "name": "@travel/api",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "start": "go run main.go",
     "dev": "go run main.go",
     "build": "go build -o travel-api main.go",
-    "test": "go test ./...",
-    "start:node": "node src/server.mjs",
-    "dev:node": "node --watch src/server.mjs"
-  },
-  "dependencies": {
-    "@travel/shared": "workspace:*"
+    "test": "go test ./..."
   }
 }

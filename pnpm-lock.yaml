@@ -15,11 +15,7 @@ importers:
         specifier: ^1.81.0
         version: 1.93.0
 
-  apps/api:
-    dependencies:
-      '@travel/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
+  apps/api: {}
 
   apps/web:
     dependencies:

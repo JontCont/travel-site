@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 重構 Docker 配置至專用 `docker/` 目錄，支援多階段建置 (`base`, `dev`, `prod`)，並讓 CI/CD 流程直接採用 `prod` target。
 - 將 AI Agent Skills 從 `.github/skills/` 遷移至 `.agents/skills/`，提升各 AI 工具跨平台載入相容性。
 
+### Removed
+- 移除舊版 Node.js 後端實作 (`apps/api/src/`) 與 Node API 整合測試，後端全面改由 Go (Gin) 原生接管。
+- 移除前端 (`apps/web/src`) 重複之領域模型與服務代碼，全面改為引入 `@travel/shared`。
+- 移除多餘與遺留檔案：舊 npm `package-lock.json`、根目錄舊 `tsconfig.*.json`、舊版 `docker/Dockerfile.base` 與 `docker/Dockerfile.dev`、舊版 `data/` 目錄。
+
 ## [0.1.0] - 2026-11-12
 
 ### Added

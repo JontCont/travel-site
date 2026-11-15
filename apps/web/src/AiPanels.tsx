@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import type { Stop, Trip } from './models/trip'
-import { listDates } from './services/trip.service'
+import { listDates, type Stop, type Trip } from '@travel/shared'
 import {
   getAiSettings,
   runAiAssist,

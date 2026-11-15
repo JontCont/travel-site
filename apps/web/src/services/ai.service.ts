@@ -1,5 +1,4 @@
-import { isTripDto, type TripDto } from '../dto/trip-workspace.dto.ts'
-import type { Stop } from '../models/trip.ts'
+import { isTripDto, type Stop, type TripDto } from '@travel/shared'
 
 export type AiProviderId = 'openai_compatible' | 'openrouter' | 'anthropic' | 'gemini'
 
