@@ -723,10 +723,10 @@ function App() {
         <button className={`side-link ${tab === 'map' ? 'active' : ''}`} onClick={() => { setTab('map'); setMobileNavOpen(false) }}>⚲ <span>地點地圖</span></button>
         <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => { setTab('flights'); setMobileNavOpen(false) }}>✈ <span>航班與住宿</span></button>
         <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => { setTab('travelers'); setMobileNavOpen(false) }}>♙ <span>同行旅客</span></button>
+        {authRole === 'admin' && <button className={`side-link ${tab === 'json-editor' ? 'active' : ''}`} onClick={() => { setTab('json-editor'); setMobileNavOpen(false) }}>{'{ }'} <span>JSON 編輯器</span></button>}
         {authRole === 'admin' && <>
           <div className="nav-label nav-section">管理</div>
           <button className={`side-link ${tab === 'access' ? 'active' : ''}`} onClick={() => { setTab('access'); setMobileNavOpen(false) }}>◈ <span>訪客通行碼</span></button>
-          <button className={`side-link ${tab === 'json-editor' ? 'active' : ''}`} onClick={() => { setTab('json-editor'); setMobileNavOpen(false) }}>{'{ }'} <span>JSON 編輯器</span></button>
         </>}
         <div className="sidebar-bottom">
           <span className="status-dot" /> NAS SQLite · {roleLabels[authRole]}
