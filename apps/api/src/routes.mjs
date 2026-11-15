@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { dirname, resolve } from 'node:path'
@@ -25,7 +25,7 @@ import {
 } from './ai/providers.mjs'
 
 const coordinatePattern = /^-?\d{1,3}(?:\.\d{1,6})?,-?\d{1,2}(?:\.\d{1,6})?$/
-const defaultDatabasePath = process.env.TRIP_DATABASE_PATH ?? fileURLToPath(new URL('../../../data/trips.sqlite', import.meta.url))
+const defaultDatabasePath = process.env.TRIP_DATABASE_PATH ?? (existsSync(fileURLToPath(new URL('../../../database/trips.sqlite', import.meta.url))) ? fileURLToPath(new URL('../../../database/trips.sqlite', import.meta.url)) : fileURLToPath(new URL('../../../data/trips.sqlite', import.meta.url)))
 const sessionCookie = 'trip_session'
 const sessionDurationMonths = 6
 const oidcTransactionMinutes = 10

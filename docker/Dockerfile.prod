@@ -24,7 +24,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=4187 \
     TRIP_HOST=0.0.0.0 \
-    TRIP_DATABASE_PATH=/data/trips.sqlite \
+    TRIP_DATABASE_PATH=/database/trips.sqlite \
     TRIP_COOKIE_SECURE=1
 
 COPY --from=build --chown=node:node /app/apps/web/dist ./dist
@@ -38,7 +38,7 @@ COPY --chown=node:node .agents/skills/itinerary-timeline/SKILL.md ./.agents/skil
 COPY --chown=node:node .agents/skills/walkable-map-routing/SKILL.md ./.agents/skills/walkable-map-routing/SKILL.md
 COPY --chown=node:node .agents/skills/travel-record-writing/SKILL.md ./.agents/skills/travel-record-writing/SKILL.md
 COPY --chown=node:node .agents/skills/trip-photo-album/SKILL.md ./.agents/skills/trip-photo-album/SKILL.md
-RUN mkdir -p /data && chown node:node /data
+RUN mkdir -p /database /data && chown node:node /database /data
 
 USER node
 EXPOSE 4187

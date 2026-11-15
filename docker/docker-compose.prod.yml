@@ -10,7 +10,7 @@ services:
     ports:
       - "4187:4187"
     volumes:
-      - ../data:/data
+      - ../database:/database
     read_only: true
     tmpfs:
       - /tmp

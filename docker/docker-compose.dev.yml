@@ -14,7 +14,7 @@ services:
     environment:
       NODE_ENV: development
     volumes:
-      - ../data:/data
+      - ../database:/database
       - ../apps:/app/apps
       - ../packages:/app/packages
       - ../tests:/app/tests
