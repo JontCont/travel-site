@@ -1,7 +1,7 @@
 name: "travel-site"
 services:
   travel-site:
-    container_name: travel-site
+    container_name: travel-travel-site-1
     extends:
       file: docker-compose.base.yml
       service: travel-site
