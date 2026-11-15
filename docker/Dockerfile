@@ -51,7 +51,7 @@ RUN pnpm build
 # ==========================================
 # Backend Build Stage (Go Gin API)
 # ==========================================
-FROM golang:1.24-alpine AS go-build
+FROM golang:alpine AS go-build
 
 WORKDIR /build
 
@@ -75,8 +75,7 @@ ENV GIN_MODE=release \
 
 RUN apk add --no-cache ca-certificates tzdata wget \
     && mkdir -p /database /app/dist /app/.agents/skills \
-    && addgroup -g 100 -S appgroup \
-    && adduser -u 1026 -S appuser -G appgroup \
+    && adduser -u 1026 -S -D -G users appuser \
     && chown -R 1026:100 /database /app
 
 COPY --from=build --chown=1026:100 /app/apps/web/dist ./dist
