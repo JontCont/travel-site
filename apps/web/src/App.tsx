@@ -16,6 +16,7 @@ import {
 import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
 
 const JsonEditorPanel = lazy(() => import('./JsonEditorPanel').then((m) => ({ default: m.JsonEditorPanel })))
+const TripMapPanel = lazy(() => import('./TripMapPanel').then((m) => ({ default: m.TripMapPanel })))
 import {
   clearAuthErrorFromUrl,
   createAccessCode,
@@ -423,7 +424,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access' | 'json-editor'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'map' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access' | 'json-editor'>('overview')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
@@ -719,6 +720,7 @@ function App() {
         {currentTrips.length > 3 && <button className="trip-list-more" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}>瀏覽更多</button>}
         <div className="nav-label nav-section">這趟旅程</div>
         <button className={`side-link ${tab === 'itinerary' ? 'active' : ''}`} onClick={() => { setTab('itinerary'); setMobileNavOpen(false) }}>▦ <span>每日行程</span></button>
+        <button className={`side-link ${tab === 'map' ? 'active' : ''}`} onClick={() => { setTab('map'); setMobileNavOpen(false) }}>⚲ <span>地點地圖</span></button>
         <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => { setTab('flights'); setMobileNavOpen(false) }}>✈ <span>航班與住宿</span></button>
         <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => { setTab('travelers'); setMobileNavOpen(false) }}>♙ <span>同行旅客</span></button>
         {authRole === 'admin' && <>
@@ -736,7 +738,7 @@ function App() {
           <div className="topbar-left">
             <button className="mobile-menu-button" aria-label="選單" onClick={() => setMobileNavOpen((open) => !open)}>☰</button>
             {tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}
-            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'access' ? '管理 / 訪客通行碼' : tab === 'json-editor' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> JSON 編輯器</> : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
+            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'access' ? '管理 / 訪客通行碼' : tab === 'json-editor' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> JSON 編輯器</> : tab === 'map' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> 地點地圖</> : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
           </div>
           <span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span>
           <button className="logout-button" onClick={() => void handleLogout()}>登出</button>
@@ -811,6 +813,7 @@ function App() {
           </div>
           <nav className="tabs" aria-label="旅程分頁">
             <button className={tab === 'itinerary' ? 'selected' : ''} onClick={() => setTab('itinerary')}>每日行程</button>
+            <button className={tab === 'map' ? 'selected' : ''} onClick={() => setTab('map')}>地點地圖</button>
             <button className={tab === 'flights' ? 'selected' : ''} onClick={() => setTab('flights')}>航班與住宿</button>
             <button className={tab === 'travelers' ? 'selected' : ''} onClick={() => setTab('travelers')}>旅客與座位</button>
             <button className={tab === 'notepad' ? 'selected' : ''} onClick={() => setTab('notepad')}>記事本</button>
@@ -878,6 +881,15 @@ function App() {
               </section>
             </div>
           </>}
+          {tab === 'map' && (
+            <Suspense fallback={<div className="load-error">正在載入行程地圖…</div>}>
+              <TripMapPanel
+                trip={trip}
+                authRole={authRole}
+                onUpdateTrip={updateTrip}
+              />
+            </Suspense>
+          )}
           {tab === 'photos' && <section className="details-grid photos-grid">
             <div>
               <h2>旅程相簿</h2>
