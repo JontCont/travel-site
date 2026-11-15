@@ -425,6 +425,7 @@ function App() {
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
   const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access' | 'ai-settings' | 'ai-assistant'>('overview')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [aiReady, setAiReady] = useState(false)
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
@@ -616,6 +617,7 @@ function App() {
     setDay(selected.startDate)
     setTab('itinerary')
     setEditing(null)
+    setMobileNavOpen(false)
   }
 
   function createTripFromAi(next: Trip) {
@@ -726,7 +728,13 @@ function App() {
 
   function renderTripCards(trips: Trip[]) {
     if (!trips.length) {
-      return <div className="empty"><span>◷</span><strong>目前沒有{tab === 'archive' ? '已結束' : '排定或進行中'}的旅程</strong></div>
+      return <div className="empty">
+        <span>◷</span>
+        <strong>目前沒有{tab === 'archive' ? '已結束' : '排定或進行中'}的旅程</strong>
+        {tab === 'overview' && archivedTrips.length > 0 && <p style={{ marginTop: '12px' }}>
+          <button className="small-action" onClick={() => setTab('archive')}>查看已結束旅程（{archivedTrips.length} 趟）</button>
+        </p>}
+      </div>
     }
     return <div className="trip-cards">{trips.map((item, index) => {
       const tripDays = listDates(item.startDate, item.endDate)
@@ -741,21 +749,22 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <button className="brand" aria-label="途間首頁：我的旅程" onClick={() => setTab('overview')}><span className="brand-mark">✳</span><span>途間 <small>TRIP STUDIO</small></span></button>
+      {mobileNavOpen && <div className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
+      <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
+        <button className="brand" aria-label="途間首頁：我的旅程" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}><span className="brand-mark">✳</span><span>途間 <small>TRIP STUDIO</small></span></button>
         <div className="nav-label">你的旅程 <span className="trip-count">{currentTrips.length}</span></div>
-        <button className={`side-link ${tab === 'timeline' ? 'active' : ''}`} onClick={() => setTab('timeline')}>◷ <span>旅程時間軸</span></button>
-        {canUseAiAssistant && <button className={`side-link ${tab === 'ai-assistant' ? 'active' : ''}`} onClick={() => setTab('ai-assistant')}>✧ <span>AI 助手</span></button>}
+        <button className={`side-link ${tab === 'timeline' ? 'active' : ''}`} onClick={() => { setTab('timeline'); setMobileNavOpen(false) }}>◷ <span>旅程時間軸</span></button>
+        {canUseAiAssistant && <button className={`side-link ${tab === 'ai-assistant' ? 'active' : ''}`} onClick={() => { setTab('ai-assistant'); setMobileNavOpen(false) }}>✧ <span>AI 助手</span></button>}
         <div className="trip-list">{renderTripLinks(currentTrips.slice(0, 3))}</div>
-        {currentTrips.length > 3 && <button className="trip-list-more" onClick={() => setTab('overview')}>瀏覽更多</button>}
+        {currentTrips.length > 3 && <button className="trip-list-more" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}>瀏覽更多</button>}
         <div className="nav-label nav-section">這趟旅程</div>
-        <button className={`side-link ${tab === 'itinerary' ? 'active' : ''}`} onClick={() => setTab('itinerary')}>▦ <span>每日行程</span></button>
-        <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => setTab('flights')}>✈ <span>航班與住宿</span></button>
-        <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => setTab('travelers')}>♙ <span>同行旅客</span></button>
+        <button className={`side-link ${tab === 'itinerary' ? 'active' : ''}`} onClick={() => { setTab('itinerary'); setMobileNavOpen(false) }}>▦ <span>每日行程</span></button>
+        <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => { setTab('flights'); setMobileNavOpen(false) }}>✈ <span>航班與住宿</span></button>
+        <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => { setTab('travelers'); setMobileNavOpen(false) }}>♙ <span>同行旅客</span></button>
         {authRole === 'admin' && <>
           <div className="nav-label nav-section">管理</div>
-          <button className={`side-link ${tab === 'access' ? 'active' : ''}`} onClick={() => setTab('access')}>◈ <span>訪客通行碼</span></button>
-                    <button className={`side-link ${tab === 'ai-settings' ? 'active' : ''}`} onClick={() => setTab('ai-settings')}>✦ <span>AI 設定</span></button>
+          <button className={`side-link ${tab === 'access' ? 'active' : ''}`} onClick={() => { setTab('access'); setMobileNavOpen(false) }}>◈ <span>訪客通行碼</span></button>
+          <button className={`side-link ${tab === 'ai-settings' ? 'active' : ''}`} onClick={() => { setTab('ai-settings'); setMobileNavOpen(false) }}>✦ <span>AI 設定</span></button>
         </>}
         <div className="sidebar-bottom">
           <span className="status-dot" /> NAS SQLite · {roleLabels[authRole]}
@@ -763,7 +772,15 @@ function App() {
         </div>
       </aside>
       <main className="main">
-        <header className="topbar">{tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}<span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'ai-settings' ? '管理 / AI 設定' : tab === 'ai-assistant' ? 'AI 助手' : tab === 'access' ? '管理 / 訪客通行碼' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span><span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span><button className="logout-button" onClick={() => void handleLogout()}>登出</button></header>
+        <header className="topbar">
+          <div className="topbar-left">
+            <button className="mobile-menu-button" aria-label="選單" onClick={() => setMobileNavOpen((open) => !open)}>☰</button>
+            {tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}
+            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'ai-settings' ? '管理 / AI 設定' : tab === 'ai-assistant' ? 'AI 助手' : tab === 'access' ? '管理 / 訪客通行碼' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
+          </div>
+          <span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span>
+          <button className="logout-button" onClick={() => void handleLogout()}>登出</button>
+        </header>
         <div className="content">
           {saveError && <p className="notice danger" role="alert">SQLite 儲存失敗：{saveError}</p>}
           {authError && <p className="notice danger" role="alert">{authError}</p>}
