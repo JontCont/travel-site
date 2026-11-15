@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, lazy, Suspense, type FormEvent } from 'react'
 import {
   buildGoogleDirectionsUrl,
   buildTripMapSearchUrl,
@@ -14,6 +14,8 @@ import {
   type TripWorkspace,
 } from '@travel/shared'
 import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
+
+const JsonEditorPanel = lazy(() => import('./JsonEditorPanel').then((m) => ({ default: m.JsonEditorPanel })))
 import {
   clearAuthErrorFromUrl,
   createAccessCode,
@@ -421,7 +423,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access' | 'json-editor'>('overview')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
@@ -722,6 +724,7 @@ function App() {
         {authRole === 'admin' && <>
           <div className="nav-label nav-section">管理</div>
           <button className={`side-link ${tab === 'access' ? 'active' : ''}`} onClick={() => { setTab('access'); setMobileNavOpen(false) }}>◈ <span>訪客通行碼</span></button>
+          <button className={`side-link ${tab === 'json-editor' ? 'active' : ''}`} onClick={() => { setTab('json-editor'); setMobileNavOpen(false) }}>{'{ }'} <span>JSON 編輯器</span></button>
         </>}
         <div className="sidebar-bottom">
           <span className="status-dot" /> NAS SQLite · {roleLabels[authRole]}
@@ -733,7 +736,7 @@ function App() {
           <div className="topbar-left">
             <button className="mobile-menu-button" aria-label="選單" onClick={() => setMobileNavOpen((open) => !open)}>☰</button>
             {tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}
-            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'access' ? '管理 / 訪客通行碼' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
+            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'access' ? '管理 / 訪客通行碼' : tab === 'json-editor' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> JSON 編輯器</> : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
           </div>
           <span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span>
           <button className="logout-button" onClick={() => void handleLogout()}>登出</button>
@@ -741,7 +744,31 @@ function App() {
         <div className="content">
           {saveError && <p className="notice danger" role="alert">SQLite 儲存失敗：{saveError}</p>}
           {authError && <p className="notice danger" role="alert">{authError}</p>}
-          {tab === 'access' && authRole === 'admin' ? <AccessCodePanel trips={workspace.trips} /> : tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
+          {tab === 'access' && authRole === 'admin' ? (
+            <AccessCodePanel trips={workspace.trips} />
+          ) : tab === 'json-editor' && authRole === 'admin' ? (
+            <section className="json-editor-section">
+              <div className="section-heading">
+                <div>
+                  <span className="overline">VS CODE JSON EDITOR</span>
+                  <h2>JSON 行程編輯器</h2>
+                  <p className="overview-caption">使用 VS Code 核心編輯器檢視與修改行程 JSON，支援語法驗證、排版對齊與快捷鍵 (Ctrl+S)。</p>
+                </div>
+              </div>
+              <Suspense fallback={<div className="load-error">正在載入 VS Code 核心編輯器…</div>}>
+                <JsonEditorPanel
+                  workspace={workspace}
+                  activeTrip={trip}
+                  onUpdateTrip={(updatedTrip) => {
+                    updateTrip(() => updatedTrip)
+                  }}
+                  onUpdateWorkspace={(updatedWorkspace) => {
+                    setWorkspace(updatedWorkspace)
+                  }}
+                />
+              </Suspense>
+            </section>
+          ) : tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
             <div className="eyebrow">MY TRIPS <span className="eyebrow-rule" /></div>
             <nav className="tabs home-tabs" aria-label="旅程總覽檢視">
               <button className={tab === 'overview' ? 'selected' : ''} onClick={() => setTab('overview')}>旅程卡片</button>
@@ -789,6 +816,7 @@ function App() {
             <button className={tab === 'notepad' ? 'selected' : ''} onClick={() => setTab('notepad')}>記事本</button>
             <button className={tab === 'photos' ? 'selected' : ''} onClick={() => setTab('photos')}>相簿</button>
             {authRole === 'admin' && <button className={tab === 'settings' ? 'selected' : ''} onClick={() => setTab('settings')}>設定</button>}
+            {authRole === 'admin' && <button className={tab === 'json-editor' ? 'selected' : ''} onClick={() => setTab('json-editor')}>JSON 編輯</button>}
           </nav>
           {tab === 'itinerary' && <>
             <div className="section-heading"><div><span className="overline">YOUR ITINERARY</span><h2>每天，都有新的風景。</h2></div><span className="muted">當地時間 · {trip.timeZone}</span></div>

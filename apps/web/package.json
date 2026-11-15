@@ -9,10 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "@monaco-editor/react": "^4.7.0",
+    "@travel/api": "workspace:*",
     "@travel/shared": "workspace:*",
-    "@travel/api": "workspace:*"
+    "monaco-editor": "^0.57.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
