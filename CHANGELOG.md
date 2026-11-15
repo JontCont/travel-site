@@ -8,11 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 實作 Go (Gin) 後端 API 服務 (`apps/api`)，達成純 Go、無 CGO 依賴（`modernc.org/sqlite`），全面支援 OIDC (DSM SSO)、訪客通行碼、Workspace CRUD、高德地圖步行代理與 AI 助手等功能。
+- 新增 Go 單元測試與整合測試 (`apps/api/handlers`, `apps/api/services/ai`, `apps/api/services/oidc`)，相容現有 83 項既有測試場景。
+- 新增 `pnpm test:go` 與 `pnpm test:all` 測試指令，並於 GitHub Actions CI 整合 Go 1.24 驗證步驟。
 - 新增 Changelog 管理規範 Skill (`.agents/skills/changelog/SKILL.md`)，依循 Keep a Changelog 1.1.0 與 pyOpenSci 標準。
 - 新增 `.specs/pnpm-workspace-sdd.md` 與 `.specs/go-gin-api-sdd.md` 軟體規格藍圖設計（SDD）。
 - 新增專案根目錄 `CHANGELOG.md`，建立標準化版本異動紀錄。
 
 ### Changed
+- 更新 `docker/Dockerfile` 與 `docker/Dockerfile.prod` 為 Go 多階段編譯架構，以極輕量 Alpine 映像檔運行，映像檔體積縮減至約 25MB，記憶體佔用小於 20MB。
 - 將專案架構重構為 pnpm monorepo workspace (`apps/web`, `apps/api`, `packages/shared`)。
   - `apps/web`: React 19 + Vite 前端 SPA。
   - `apps/api`: 後端 API 服務。

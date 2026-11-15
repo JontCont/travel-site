@@ -8,6 +8,8 @@
     "build": "pnpm --filter @travel/web build",
     "lint": "oxlint",
     "test": "node --test tests/*.test.mjs",
+    "test:go": "pnpm --filter @travel/api test",
+    "test:all": "pnpm test && pnpm test:go",
     "start": "pnpm --filter @travel/api start",
     "docker:dev": "docker compose -f docker/docker-compose.dev.yml up",
     "docker:prod": "docker compose -f docker/docker-compose.prod.yml up -d",

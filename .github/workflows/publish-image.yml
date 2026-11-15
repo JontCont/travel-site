@@ -26,12 +26,19 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: apps/api/go.sum
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Lint
         run: pnpm run lint
-      - name: Test
+      - name: Test (Node)
         run: pnpm test
+      - name: Test (Go)
+        run: pnpm test:go
       - name: Build application
         run: pnpm run build
 

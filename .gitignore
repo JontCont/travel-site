@@ -31,5 +31,6 @@ data/*.sqlite-*
 *.sln
 *.sw?
 
-# spec
-.specs/
+# Binary
+*.exe
+*.dll

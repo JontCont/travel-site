@@ -40,32 +40,42 @@ COPY . .
 RUN pnpm build
 
 # ==========================================
-# Production Stage: Hardened, minimal runtime
+# Backend Build Stage (Go Gin API)
 # ==========================================
-FROM node:24-alpine AS prod
+FROM golang:1.24-alpine AS go-build
+
+WORKDIR /build
+
+COPY apps/api/go.mod apps/api/go.sum ./
+RUN go mod download
+
+COPY apps/api/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /build/travel-api main.go
+
+# ==========================================
+# Production Stage: Hardened, minimal Go runtime
+# ==========================================
+FROM alpine:3.21 AS prod
 
 WORKDIR /app
-ENV NODE_ENV=production \
+ENV GIN_MODE=release \
     PORT=4187 \
     TRIP_HOST=0.0.0.0 \
     TRIP_DATABASE_PATH=/database/trips.sqlite \
     TRIP_COOKIE_SECURE=1
 
-# Copy build artifacts and server code
-COPY --from=build --chown=node:node /app/apps/web/dist ./dist
-COPY --chown=node:node apps/api/src/server.mjs apps/api/src/routes.mjs apps/api/src/oidc.mjs ./apps/api/src/
-COPY --chown=node:node apps/api/src/ai ./apps/api/src/ai
-COPY --chown=node:node packages/shared ./packages/shared
-COPY --chown=node:node apps/api/package.json ./apps/api/package.json
-COPY --chown=node:node package.json pnpm-workspace.yaml ./
-COPY --chown=node:node .agents/skills/travel-plan-foundation/SKILL.md ./.agents/skills/travel-plan-foundation/SKILL.md
-COPY --chown=node:node .agents/skills/itinerary-timeline/SKILL.md ./.agents/skills/itinerary-timeline/SKILL.md
-COPY --chown=node:node .agents/skills/walkable-map-routing/SKILL.md ./.agents/skills/walkable-map-routing/SKILL.md
-COPY --chown=node:node .agents/skills/travel-record-writing/SKILL.md ./.agents/skills/travel-record-writing/SKILL.md
-COPY --chown=node:node .agents/skills/trip-photo-album/SKILL.md ./.agents/skills/trip-photo-album/SKILL.md
-RUN mkdir -p /database /data && chown node:node /database /data
+RUN apk add --no-cache ca-certificates tzdata wget \
+    && mkdir -p /database /app/dist /app/.agents/skills \
+    && addgroup -g 100 -S appgroup \
+    && adduser -u 1026 -S appuser -G appgroup \
+    && chown -R 1026:100 /database /app
 
-USER node
+COPY --from=build --chown=1026:100 /app/apps/web/dist ./dist
+COPY --from=go-build --chown=1026:100 /build/travel-api ./travel-api
+COPY --chown=1026:100 .agents/skills ./.agents/skills
+
+USER 1026:100
 EXPOSE 4187
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["node", "-e", "fetch('http://127.0.0.1:4187/api/auth/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-CMD ["node", "apps/api/src/server.mjs"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1:4187/api/auth/status || exit 1
+CMD ["/app/travel-api"]
