@@ -43,67 +43,19 @@ const DESTINATION_COORDS: Record<string, [number, number]> = {
   雪梨: [151.2093, -33.8688],
 }
 
-type MapStyleKey = 'voyager' | 'dark' | 'osm'
+type MapStyleKey = 'osm' | 'dark' | 'satellite' | 'hot'
 
 const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpecification }> = {
-  voyager: {
-    name: '🌿 旅行亮色 (Voyager)',
-    style: {
-      version: 8,
-      sources: {
-        'carto-voyager': {
-          type: 'raster',
-          tiles: [
-            'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-          ],
-          tileSize: 256,
-          attribution: '&copy; OpenStreetMap contributors, &copy; CARTO',
-        },
-      },
-      layers: [
-        {
-          id: 'carto-voyager-layer',
-          type: 'raster',
-          source: 'carto-voyager',
-          minzoom: 0,
-          maxzoom: 20,
-        },
-      ],
-    },
-  },
-  dark: {
-    name: '🌙 深色夜間 (Dark Mode)',
-    style: {
-      version: 8,
-      sources: {
-        'carto-dark': {
-          type: 'raster',
-          tiles: [
-            'https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png',
-          ],
-          tileSize: 256,
-          attribution: '&copy; OpenStreetMap contributors, &copy; CARTO',
-        },
-      },
-      layers: [
-        {
-          id: 'carto-dark-layer',
-          type: 'raster',
-          source: 'carto-dark',
-          minzoom: 0,
-          maxzoom: 20,
-        },
-      ],
-    },
-  },
   osm: {
-    name: '🗺 標準街道 (OSM)',
+    name: '🗺 標準街道 (OSM - 免Key)',
     style: {
       version: 8,
       sources: {
         'osm-tiles': {
           type: 'raster',
-          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          tiles: [
+            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          ],
           tileSize: 256,
           attribution: '&copy; OpenStreetMap contributors',
         },
@@ -113,6 +65,96 @@ const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpe
           id: 'osm-layer',
           type: 'raster',
           source: 'osm-tiles',
+          minzoom: 0,
+          maxzoom: 19,
+        },
+      ],
+    },
+  },
+  dark: {
+    name: '🌙 深色夜間 (Dark Canvas - 免Key)',
+    style: {
+      version: 8,
+      sources: {
+        'esri-dark-base': {
+          type: 'raster',
+          tiles: [
+            'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+          ],
+          tileSize: 256,
+          attribution: '&copy; Esri, HERE, Garmin, OpenStreetMap contributors',
+        },
+        'esri-dark-ref': {
+          type: 'raster',
+          tiles: [
+            'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+          ],
+          tileSize: 256,
+          attribution: '&copy; Esri',
+        },
+      },
+      layers: [
+        {
+          id: 'esri-dark-base-layer',
+          type: 'raster',
+          source: 'esri-dark-base',
+          minzoom: 0,
+          maxzoom: 19,
+        },
+        {
+          id: 'esri-dark-ref-layer',
+          type: 'raster',
+          source: 'esri-dark-ref',
+          minzoom: 0,
+          maxzoom: 19,
+        },
+      ],
+    },
+  },
+  satellite: {
+    name: '🛰 衛星空照 (Satellite - 免Key)',
+    style: {
+      version: 8,
+      sources: {
+        'esri-satellite': {
+          type: 'raster',
+          tiles: [
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          ],
+          tileSize: 256,
+          attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+        },
+      },
+      layers: [
+        {
+          id: 'esri-satellite-layer',
+          type: 'raster',
+          source: 'esri-satellite',
+          minzoom: 0,
+          maxzoom: 19,
+        },
+      ],
+    },
+  },
+  hot: {
+    name: '🌿 暖色人道 (OSM HOT - 免Key)',
+    style: {
+      version: 8,
+      sources: {
+        'osm-hot': {
+          type: 'raster',
+          tiles: [
+            'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+          ],
+          tileSize: 256,
+          attribution: '&copy; OpenStreetMap contributors, Humanitarian OpenStreetMap Team',
+        },
+      },
+      layers: [
+        {
+          id: 'osm-hot-layer',
+          type: 'raster',
+          source: 'osm-hot',
           minzoom: 0,
           maxzoom: 19,
         },
@@ -137,7 +179,7 @@ function parseCoordinates(value: string | undefined): [number, number] | null {
 export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps) {
   const tripDates = useMemo(() => listDates(trip.startDate, trip.endDate), [trip.startDate, trip.endDate])
   const [selectedDay, setSelectedDay] = useState<string>('all')
-  const [mapStyleKey, setMapStyleKey] = useState<MapStyleKey>('voyager')
+  const [mapStyleKey, setMapStyleKey] = useState<MapStyleKey>('osm')
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null)
   const [isMarkingMode, setIsMarkingMode] = useState(false)
   const [markedCoords, setMarkedCoords] = useState<[number, number] | null>(null)
@@ -237,16 +279,10 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Handle map style change
-  useEffect(() => {
-    if (!mapRef.current) return
-    mapRef.current.setStyle(MAP_STYLES[mapStyleKey].style)
-  }, [mapStyleKey])
-
   // Update Route Polyline Layer
   const updateRouteLine = useCallback(() => {
     const map = mapRef.current
-    if (!map) return
+    if (!map || !map.isStyleLoaded()) return
 
     const sourceId = 'route-source'
     const layerId = 'route-layer'
@@ -285,6 +321,16 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
       },
     })
   }, [mappedStops])
+
+  // Handle map style change
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    map.setStyle(MAP_STYLES[mapStyleKey].style)
+    map.once('style.load', () => {
+      updateRouteLine()
+    })
+  }, [mapStyleKey, updateRouteLine])
 
   // Re-render markers and route lines when mappedStops or map changes
   useEffect(() => {
