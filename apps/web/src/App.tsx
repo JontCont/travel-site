@@ -17,6 +17,7 @@ import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/tr
 
 const JsonEditorPanel = lazy(() => import('./JsonEditorPanel').then((m) => ({ default: m.JsonEditorPanel })))
 const TripMapPanel = lazy(() => import('./TripMapPanel').then((m) => ({ default: m.TripMapPanel })))
+const DocsPanel = lazy(() => import('./DocsPanel').then((m) => ({ default: m.DocsPanel })))
 import {
   clearAuthErrorFromUrl,
   createAccessCode,
@@ -424,7 +425,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'map' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access' | 'json-editor'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'map' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access' | 'json-editor' | 'docs'>('overview')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
@@ -724,8 +725,9 @@ function App() {
         <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => { setTab('flights'); setMobileNavOpen(false) }}>✈ <span>航班與住宿</span></button>
         <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => { setTab('travelers'); setMobileNavOpen(false) }}>♙ <span>同行旅客</span></button>
         {authRole === 'admin' && <button className={`side-link ${tab === 'json-editor' ? 'active' : ''}`} onClick={() => { setTab('json-editor'); setMobileNavOpen(false) }}>{'{ }'} <span>JSON 編輯器</span></button>}
+        <div className="nav-label nav-section">系統</div>
+        <button className={`side-link ${tab === 'docs' ? 'active' : ''}`} onClick={() => { setTab('docs'); setMobileNavOpen(false) }}>📖 <span>系統說明文件</span></button>
         {authRole === 'admin' && <>
-          <div className="nav-label nav-section">管理</div>
           <button className={`side-link ${tab === 'access' ? 'active' : ''}`} onClick={() => { setTab('access'); setMobileNavOpen(false) }}>◈ <span>訪客通行碼</span></button>
         </>}
         <div className="sidebar-bottom">
@@ -738,7 +740,7 @@ function App() {
           <div className="topbar-left">
             <button className="mobile-menu-button" aria-label="選單" onClick={() => setMobileNavOpen((open) => !open)}>☰</button>
             {tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}
-            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'access' ? '管理 / 訪客通行碼' : tab === 'json-editor' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> JSON 編輯器</> : tab === 'map' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> 地點地圖</> : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
+            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'docs' ? '系統 / 使用手冊與說明文件' : tab === 'access' ? '管理 / 訪客通行碼' : tab === 'json-editor' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> JSON 編輯器</> : tab === 'map' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> 地點地圖</> : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
           </div>
           <span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span>
           <button className="logout-button" onClick={() => void handleLogout()}>登出</button>
@@ -746,7 +748,11 @@ function App() {
         <div className="content">
           {saveError && <p className="notice danger" role="alert">SQLite 儲存失敗：{saveError}</p>}
           {authError && <p className="notice danger" role="alert">{authError}</p>}
-          {tab === 'access' && authRole === 'admin' ? (
+          {tab === 'docs' ? (
+            <Suspense fallback={<div className="load-error">正在載入系統說明文件…</div>}>
+              <DocsPanel />
+            </Suspense>
+          ) : tab === 'access' && authRole === 'admin' ? (
             <AccessCodePanel trips={workspace.trips} />
           ) : tab === 'json-editor' && authRole === 'admin' ? (
             <section className="json-editor-section">
