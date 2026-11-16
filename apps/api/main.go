@@ -34,6 +34,7 @@ func findDistDir() string {
 }
 
 func main() {
+	log.SetOutput(os.Stdout)
 	cfg := config.LoadConfig()
 
 	if os.Getenv("NODE_ENV") == "production" || os.Getenv("GIN_MODE") == "release" {
@@ -131,7 +132,7 @@ func main() {
 	})
 
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
-	log.Printf("Trip site Go backend listening on http://%s", addr)
+	log.Printf("[INFO] Trip site Go backend listening on http://%s", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Server failed to run: %v", err)
 	}
