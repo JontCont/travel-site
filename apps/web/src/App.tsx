@@ -15,6 +15,25 @@ import {
 } from '@travel/shared'
 import { loadTripWorkspace, saveTripNotepad, saveWorkspace } from './services/trip-workspace.service'
 import { CreateTripModal } from './CreateTripModal'
+import {
+  ArrowRightIcon,
+  ArrowUpRightIcon,
+  BookOpenIcon,
+  BrandSparkIcon,
+  CalendarGridIcon,
+  ChevronLeftIcon,
+  ClockIcon,
+  CloseIcon,
+  CodeBracesIcon,
+  HotelIcon,
+  KeyShieldIcon,
+  MapPinIcon,
+  MenuIcon,
+  PlaneIcon,
+  PlusIcon,
+  SparkleIcon,
+  UsersIcon,
+} from './Icons'
 
 const JsonEditorPanel = lazy(() => import('./JsonEditorPanel').then((m) => ({ default: m.JsonEditorPanel })))
 const TripMapPanel = lazy(() => import('./TripMapPanel').then((m) => ({ default: m.TripMapPanel })))
@@ -86,7 +105,7 @@ type AccessGateProps = {
 function AccessGate({ configured, error, busy, code, onCodeChange, onSubmit, onSynologyLogin }: AccessGateProps) {
   return <main className="access-page">
     <section className="access-card">
-      <div className="access-brand"><span className="brand-mark">✳</span><span>途間 <small>TRIP STUDIO</small></span></div>
+      <div className="access-brand"><span className="brand-mark"><BrandSparkIcon size={18} /></span><span>途間 <small>TRIP STUDIO</small></span></div>
       <span className="overline">PRIVATE TRAVEL SPACE</span>
       <h1>旅程只和同行的人分享。</h1>
       <p className="access-description">使用 Synology 帳號登入，或輸入管理員提供的訪客通行碼。NAS 管理員可以編輯旅程並發放通行碼。</p>
@@ -375,7 +394,7 @@ function AccessCodePanel({ trips }: AccessCodePanelProps) {
       {listError && <p className="notice danger" role="alert">{listError}</p>}
       {revokeError && <p className="notice danger" role="alert">{revokeError}</p>}
       {loadingCodes && !listError && <p className="access-admin-description">正在讀取通行碼…</p>}
-      {!loadingCodes && !listError && !codes.length && <div className="empty"><span>◈</span><strong>尚未發放任何訪客通行碼</strong></div>}
+      {!loadingCodes && !listError && !codes.length && <div className="empty"><span><KeyShieldIcon size={28} /></span><strong>尚未發放任何訪客通行碼</strong></div>}
       {codes.map((item) => {
         const expiry = describeExpiry(item.expiresAt)
         const isEditing = editingId === item.id
@@ -707,7 +726,7 @@ function App() {
   function renderTripCards(trips: Trip[]) {
     if (!trips.length) {
       return <div className="empty">
-        <span>◷</span>
+        <span><ClockIcon size={28} /></span>
         <strong>目前沒有{tab === 'archive' ? '已結束' : '排定或進行中'}的旅程</strong>
         {tab === 'overview' && archivedTrips.length > 0 && <p style={{ marginTop: '12px' }}>
           <button className="small-action" onClick={() => setTab('archive')}>查看已結束旅程（{archivedTrips.length} 趟）</button>
@@ -729,21 +748,21 @@ function App() {
     <div className="app-shell">
       {mobileNavOpen && <div className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
       <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
-        <button className="brand" aria-label="途間首頁：我的旅程" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}><span className="brand-mark">✳</span><span>途間 <small>TRIP STUDIO</small></span></button>
+        <button className="brand" aria-label="途間首頁：我的旅程" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}><span className="brand-mark"><BrandSparkIcon size={18} /></span><span>途間 <small>TRIP STUDIO</small></span></button>
         <div className="nav-label">你的旅程 <span className="trip-count">{currentTrips.length}</span></div>
-        <button className={`side-link ${tab === 'timeline' ? 'active' : ''}`} onClick={() => { setTab('timeline'); setMobileNavOpen(false) }}>◷ <span>旅程時間軸</span></button>
+        <button className={`side-link ${tab === 'timeline' ? 'active' : ''}`} onClick={() => { setTab('timeline'); setMobileNavOpen(false) }}><span className="side-link-icon"><ClockIcon size={18} /></span><span>旅程時間軸</span></button>
         <div className="trip-list">{renderTripLinks(currentTrips.slice(0, 3))}</div>
         {currentTrips.length > 3 && <button className="trip-list-more" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}>瀏覽更多</button>}
         <div className="nav-label nav-section">這趟旅程</div>
-        <button className={`side-link ${tab === 'itinerary' ? 'active' : ''}`} onClick={() => { setTab('itinerary'); setMobileNavOpen(false) }}>▦ <span>每日行程</span></button>
-        <button className={`side-link ${tab === 'map' ? 'active' : ''}`} onClick={() => { setTab('map'); setMobileNavOpen(false) }}>⚲ <span>地點地圖</span></button>
-        <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => { setTab('flights'); setMobileNavOpen(false) }}>✈ <span>航班與住宿</span></button>
-        <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => { setTab('travelers'); setMobileNavOpen(false) }}>♙ <span>同行旅客</span></button>
-        {authRole === 'admin' && <button className={`side-link ${tab === 'json-editor' ? 'active' : ''}`} onClick={() => { setTab('json-editor'); setMobileNavOpen(false) }}>{'{ }'} <span>JSON 編輯器</span></button>}
+        <button className={`side-link ${tab === 'itinerary' ? 'active' : ''}`} onClick={() => { setTab('itinerary'); setMobileNavOpen(false) }}><span className="side-link-icon"><CalendarGridIcon size={18} /></span><span>每日行程</span></button>
+        <button className={`side-link ${tab === 'map' ? 'active' : ''}`} onClick={() => { setTab('map'); setMobileNavOpen(false) }}><span className="side-link-icon"><MapPinIcon size={18} /></span><span>地點地圖</span></button>
+        <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => { setTab('flights'); setMobileNavOpen(false) }}><span className="side-link-icon"><PlaneIcon size={18} /></span><span>航班與住宿</span></button>
+        <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => { setTab('travelers'); setMobileNavOpen(false) }}><span className="side-link-icon"><UsersIcon size={18} /></span><span>同行旅客</span></button>
+        {authRole === 'admin' && <button className={`side-link ${tab === 'json-editor' ? 'active' : ''}`} onClick={() => { setTab('json-editor'); setMobileNavOpen(false) }}><span className="side-link-icon"><CodeBracesIcon size={18} /></span><span>JSON 編輯器</span></button>}
         <div className="nav-label nav-section">系統</div>
-        <button className={`side-link ${tab === 'docs' ? 'active' : ''}`} onClick={() => { setTab('docs'); setMobileNavOpen(false) }}>📖 <span>系統說明文件</span></button>
+        <button className={`side-link ${tab === 'docs' ? 'active' : ''}`} onClick={() => { setTab('docs'); setMobileNavOpen(false) }}><span className="side-link-icon"><BookOpenIcon size={18} /></span><span>系統說明文件</span></button>
         {authRole === 'admin' && <>
-          <button className={`side-link ${tab === 'access' ? 'active' : ''}`} onClick={() => { setTab('access'); setMobileNavOpen(false) }}>◈ <span>訪客通行碼</span></button>
+          <button className={`side-link ${tab === 'access' ? 'active' : ''}`} onClick={() => { setTab('access'); setMobileNavOpen(false) }}><span className="side-link-icon"><KeyShieldIcon size={18} /></span><span>訪客通行碼</span></button>
         </>}
         <div className="sidebar-bottom">
           <span className="status-dot" /> NAS SQLite · {roleLabels[authRole]}
@@ -753,8 +772,8 @@ function App() {
       <main className="main">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="mobile-menu-button" aria-label="選單" onClick={() => setMobileNavOpen((open) => !open)}>☰</button>
-            {tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}>‹ 我的旅程</button>}
+            <button className="mobile-menu-button" aria-label="選單" onClick={() => setMobileNavOpen((open) => !open)}>{mobileNavOpen ? <CloseIcon size={18} /> : <MenuIcon size={18} />}</button>
+            {tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}><ChevronLeftIcon size={15} /> 我的旅程</button>}
             <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'docs' ? '系統 / 使用手冊與說明文件' : tab === 'access' ? '管理 / 訪客通行碼' : tab === 'json-editor' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> JSON 編輯器</> : tab === 'map' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> 地點地圖</> : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
           </div>
           <span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span>
@@ -798,7 +817,7 @@ function App() {
               <button className={tab === 'timeline' ? 'selected' : ''} onClick={() => setTab('timeline')}>旅程時間軸</button>
               <button className={tab === 'archive' ? 'selected' : ''} onClick={() => setTab('archive')}>封存</button>
             </nav>
-            <div className="section-heading"><div><span className="overline">旅程總覽 · {workspace.trips.length} 趟</span><h2>每一趟旅程，都從這裡開始。</h2><p className="overview-caption">管理你的出國計畫，選取旅程以查看每日安排。</p></div>{authRole === 'admin' && <button type="button" className="small-action" onClick={() => setCreateTripOpen(true)}>＋ 新增旅程</button>}</div>
+            <div className="section-heading"><div><span className="overline">旅程總覽 · {workspace.trips.length} 趟</span><h2>每一趟旅程，都從這裡開始。</h2><p className="overview-caption">管理你的出國計畫，選取旅程以查看每日安排。</p></div>{authRole === 'admin' && <button type="button" className="small-action" onClick={() => setCreateTripOpen(true)}><PlusIcon size={14} /> 新增旅程</button>}</div>
             {tab === 'overview' && renderTripCards(currentTrips)}
             {tab === 'timeline' && <div className="journey-timeline">
               {sortTripsNearToFar(workspace.trips, statusTime).map((item) => {
@@ -822,15 +841,15 @@ function App() {
               <div className="hero-kicker">{trip.country || trip.destination} <span>✦</span> {dates.length} 天 {Math.max(0, dates.length - 1)} 夜</div>
               <h1>遇見<span>{trip.destination}</span></h1>
               <p>{trip.description || `開始規劃你的${trip.destination}旅程。`}</p>
-              <div className="hero-meta"><span>◷ &nbsp;{trip.startDate.replaceAll('-', '.')} — {trip.endDate.slice(5).replaceAll('-', '.')}</span><span>◷ &nbsp;當地時間 {trip.timeZone}</span></div>
+              <div className="hero-meta"><span><ClockIcon size={14} /> {trip.startDate.replaceAll('-', '.')} — {trip.endDate.slice(5).replaceAll('-', '.')}</span><span><ClockIcon size={14} /> 當地時間 {trip.timeZone}</span></div>
             </div>
             <div className="hero-illustration" aria-hidden="true"><span className="sun" /><div className="hill hill-one" /><div className="hill hill-two" /><div className="building building-one" /><div className="building building-two" /></div>
             <div className="hero-index">{String(workspace.trips.indexOf(trip) + 1).padStart(2, '0')} / {trip.destination.toUpperCase()}</div>
           </section>
           <div className="summary-row">
-            <button className="summary-card" onClick={() => setTab('flights')}><span className="summary-icon peach">✈</span><span><strong>航班資訊</strong><small>{trip.outboundFlight ? `${trip.outboundFlight.airline} · ${trip.outboundFlight.number}${trip.returnFlight ? ` / ${trip.returnFlight.number}` : ''}` : '尚未新增航班資料'}</small></span><span className="arrow">↗</span></button>
-            {trip.hotelName ? <a className="summary-card" href={buildTripMapSearchUrl(trip, trip.hotelName, trip.hotelAddress)} target="_blank" rel="noreferrer"><span className="summary-icon green">⌂</span><span><strong>入住住宿</strong><small>{trip.hotelName}</small></span><span className="arrow">↗</span></a> : <button className="summary-card" onClick={() => setTab('flights')}><span className="summary-icon green">⌂</span><span><strong>入住住宿</strong><small>尚未新增住宿資訊</small></span><span className="arrow">↗</span></button>}
-            <button className="summary-card" onClick={() => setTab('travelers')}><span className="summary-icon blue">♙</span><span><strong>同行旅客</strong><small>{trip.travelers.length ? `已儲存 ${trip.travelers.length} 位` : '尚未新增旅客'}</small></span><span className="arrow">↗</span></button>
+            <button className="summary-card" onClick={() => setTab('flights')}><span className="summary-icon peach"><PlaneIcon size={19} /></span><span><strong>航班資訊</strong><small>{trip.outboundFlight ? `${trip.outboundFlight.airline} · ${trip.outboundFlight.number}${trip.returnFlight ? ` / ${trip.returnFlight.number}` : ''}` : '尚未新增航班資料'}</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></button>
+            {trip.hotelName ? <a className="summary-card" href={buildTripMapSearchUrl(trip, trip.hotelName, trip.hotelAddress)} target="_blank" rel="noreferrer"><span className="summary-icon green"><HotelIcon size={19} /></span><span><strong>入住住宿</strong><small>{trip.hotelName}</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></a> : <button className="summary-card" onClick={() => setTab('flights')}><span className="summary-icon green"><HotelIcon size={19} /></span><span><strong>入住住宿</strong><small>尚未新增住宿資訊</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></button>}
+            <button className="summary-card" onClick={() => setTab('travelers')}><span className="summary-icon blue"><UsersIcon size={19} /></span><span><strong>同行旅客</strong><small>{trip.travelers.length ? `已儲存 ${trip.travelers.length} 位` : '尚未新增旅客'}</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></button>
           </div>
           <nav className="tabs" aria-label="旅程分頁">
             <button className={tab === 'itinerary' ? 'selected' : ''} onClick={() => setTab('itinerary')}>每日行程</button>
@@ -849,8 +868,8 @@ function App() {
             </div>
             <div className="workspace">
               <section className="schedule">
-                <div className="panel-title"><div><span className="overline">DAY {dates.indexOf(activeDay) + 1} / {String(dates.length).padStart(2, '0')}</span><h3>{prettyDate(activeDay)} 的行程</h3></div>{authRole === 'admin' && <button className="small-action" onClick={() => { const id = crypto.randomUUID(); updateStops([...stops, { id, name: '', address: '', time: '10:00', duration: 60, coordinates: '' }]); setEditing(id) }}>＋ 新增景點</button>}</div>
-                {isDeparture && trip.outboundFlight && <div className="event fixed"><div className="event-time">{trip.outboundFlight.departureTime}<small>{trip.outboundFlight.departureAirport}</small></div><span className="event-symbol">✈</span><div><span className="tag">固定行程 · 航班</span><h4>出發前往{trip.destination}</h4><p>{trip.outboundFlight.number} · {trip.outboundFlight.departureAirport} {trip.outboundFlight.departureTerminal} → {trip.outboundFlight.arrivalAirport} {trip.outboundFlight.arrivalTerminal} · {trip.outboundFlight.arrivalTime} 抵達</p></div></div>}
+                <div className="panel-title"><div><span className="overline">DAY {dates.indexOf(activeDay) + 1} / {String(dates.length).padStart(2, '0')}</span><h3>{prettyDate(activeDay)} 的行程</h3></div>{authRole === 'admin' && <button className="small-action" onClick={() => { const id = crypto.randomUUID(); updateStops([...stops, { id, name: '', address: '', time: '10:00', duration: 60, coordinates: '' }]); setEditing(id) }}><PlusIcon size={14} /> 新增景點</button>}</div>
+                {isDeparture && trip.outboundFlight && <div className="event fixed"><div className="event-time">{trip.outboundFlight.departureTime}<small>{trip.outboundFlight.departureAirport}</small></div><span className="event-symbol"><PlaneIcon size={15} /></span><div><span className="tag">固定行程 · 航班</span><h4>出發前往{trip.destination}</h4><p>{trip.outboundFlight.number} · {trip.outboundFlight.departureAirport} {trip.outboundFlight.departureTerminal} → {trip.outboundFlight.arrivalAirport} {trip.outboundFlight.arrivalTerminal} · {trip.outboundFlight.arrivalTime} 抵達</p></div></div>}
                 {flightConflict && <p className="route-error" role="alert">景點時間與航班時段衝突；請另計入機場出入境及交通時間。</p>}
                 {timeConflict && <p className="route-error" role="alert">景點時間有重疊或順序不符；請調整開始時間及停留時間，並預留移動時間。</p>}
                 {mapConfigError && <p className="route-error" role="alert">{mapConfigError}</p>}
@@ -897,8 +916,8 @@ function App() {
                   </div></div>
                   {index < stops.length - 1 && !stop.hideFromMap && !stops[index + 1].hideFromMap && <div className="transfer">↳ 移動時間尚未驗證{mapApiKey && isChinaTrip(trip.country) && hasValidCoordinates(stop.coordinates) && hasValidCoordinates(stops[index + 1].coordinates) && <> · <a href={amapWalkingRoute(stop.coordinates, stops[index + 1].coordinates, stops[index + 1].name, mapApiKey)} target="_blank" rel="noreferrer">用高德 LightMap 查看此段 ↗</a></>}{!isChinaTrip(trip.country) && (['walking', 'transit', 'driving'] as RouteMode[]).map((mode) => <span key={mode}> · <a href={buildGoogleDirectionsUrl([stop.name, stop.address].filter(Boolean).join(' '), [stops[index + 1].name, stops[index + 1].address].filter(Boolean).join(' '), mode)} target="_blank" rel="noreferrer">Google 地圖{routeModeLabels[mode]}路線 ↗</a></span>)}</div>}
                 </div>)}
-                {isReturn && trip.returnFlight && <div className="event fixed"><div className="event-time">{trip.returnFlight.departureTime}<small>{trip.returnFlight.departureAirport}</small></div><span className="event-symbol">✈</span><div><span className="tag">固定行程 · 航班</span><h4>返程</h4><p>{trip.returnFlight.number} · {trip.returnFlight.departureAirport} {trip.returnFlight.departureTerminal} → {trip.returnFlight.arrivalAirport} {trip.returnFlight.arrivalTerminal} · {trip.returnFlight.arrivalTime} 抵達</p></div></div>}
-                {!stops.length && <div className="empty"><span>✧</span><strong>這一天，留給你自由安排。</strong><p>新增想去的地方，開始規劃屬於你的{trip.destination}路線。</p></div>}
+                {isReturn && trip.returnFlight && <div className="event fixed"><div className="event-time">{trip.returnFlight.departureTime}<small>{trip.returnFlight.departureAirport}</small></div><span className="event-symbol"><PlaneIcon size={15} /></span><div><span className="tag">固定行程 · 航班</span><h4>返程</h4><p>{trip.returnFlight.number} · {trip.returnFlight.departureAirport} {trip.returnFlight.departureTerminal} → {trip.returnFlight.arrivalAirport} {trip.returnFlight.arrivalTerminal} · {trip.returnFlight.arrivalTime} 抵達</p></div></div>}
+                {!stops.length && <div className="empty"><span><SparkleIcon size={28} /></span><strong>這一天，留給你自由安排。</strong><p>新增想去的地方，開始規劃屬於你的{trip.destination}路線。</p></div>}
               </section>
             </div>
           </>}
@@ -940,7 +959,7 @@ function App() {
                 {flight ? <>
                   <div className="flight-route">
                     <div><strong>{flight.departureTime}</strong><span>{flight.departureAirport} {flight.departureTerminal}</span></div>
-                    <span className="flight-arrow" aria-hidden="true">→</span>
+                    <span className="flight-arrow" aria-hidden="true"><ArrowRightIcon size={18} /></span>
                     <div><strong>{flight.arrivalTime}</strong><span>{flight.arrivalAirport} {flight.arrivalTerminal}</span></div>
                   </div>
                   <p className="flight-number">{flight.airline} · {flight.number}</p>
@@ -1009,7 +1028,7 @@ function App() {
               <div className="traveler-value"><span>去程座位 · {trip.outboundFlight?.number ?? '未提供'}</span><strong>{traveler.outbound || '—'}</strong></div>
               <div className="traveler-value"><span>回程座位 · {trip.returnFlight?.number ?? '未提供'}</span><strong>{traveler.inbound || '—'}</strong></div>
             </div>)}
-            {!trip.travelers.length && <div className="empty"><span>♙</span><strong>尚未提供旅客資料</strong></div>}
+            {!trip.travelers.length && <div className="empty"><span><UsersIcon size={28} /></span><strong>尚未提供旅客資料</strong></div>}
           </div>}
           {tab === 'notepad' && <NotepadPanel
             key={trip.id}

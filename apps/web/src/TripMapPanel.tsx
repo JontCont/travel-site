@@ -7,6 +7,13 @@ import {
   type Stop,
   type Trip,
 } from '@travel/shared'
+import {
+  ArrowUpRightIcon,
+  CheckIcon,
+  CloseIcon,
+  CrosshairIcon,
+  MapPinIcon,
+} from './Icons'
 
 function prettyDate(date: string, options: Intl.DateTimeFormatOptions = {
   month: 'numeric',
@@ -47,7 +54,7 @@ type MapStyleKey = 'osm' | 'dark' | 'satellite' | 'hot'
 
 const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpecification }> = {
   osm: {
-    name: '🗺 標準街道 (OSM)',
+    name: '標準街道 (OSM)',
     style: {
       version: 8,
       sources: {
@@ -72,7 +79,7 @@ const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpe
     },
   },
   dark: {
-    name: '🌙 深色夜間 (Dark Mode)',
+    name: '深色夜間 (Dark Mode)',
     style: {
       version: 8,
       sources: {
@@ -112,7 +119,7 @@ const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpe
     },
   },
   satellite: {
-    name: '🛰 衛星空照 (Satellite)',
+    name: '衛星空照 (Satellite)',
     style: {
       version: 8,
       sources: {
@@ -137,7 +144,7 @@ const MAP_STYLES: Record<MapStyleKey, { name: string; style: maplibregl.StyleSpe
     },
   },
   hot: {
-    name: '🌿 暖色街道 (OSM HOT)',
+    name: '暖色街道 (OSM HOT)',
     style: {
       version: 8,
       sources: {
@@ -354,7 +361,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
     if (hotelCoords) {
       const el = document.createElement('div')
       el.className = 'maplibre-marker hotel'
-      el.innerHTML = '<span class="pin-symbol">⌂</span>'
+      el.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9v11h13V9"/><path d="M9.5 20v-5.5h5V20"/></svg>'
       el.onclick = (e) => {
         e.stopPropagation()
         setSelectedStopId('hotel')
@@ -567,7 +574,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
             onClick={handleResetBounds}
             title="自動縮放對齊所有景點"
           >
-            ⌖ 置中對齊
+            <CrosshairIcon size={14} /> 置中對齊
           </button>
 
           {authRole === 'admin' && (
@@ -583,7 +590,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
                 }
               }}
             >
-              {isMarkingMode ? '✕ 取消標記' : '⚲ 標記新地點'}
+              {isMarkingMode ? <><CloseIcon size={14} /> 取消標記</> : <><MapPinIcon size={14} /> 標記新地點</>}
             </button>
           )}
         </div>
@@ -623,7 +630,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
                   onClick={() => setSelectedStopId(null)}
                   aria-label="關閉"
                 >
-                  ✕
+                  <CloseIcon size={15} />
                 </button>
               </div>
               <p className="popup-address">{activeStopDetail.stop.address || '尚未提供詳細地址'}</p>
@@ -642,7 +649,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
                   rel="noreferrer"
                   className="popup-btn"
                 >
-                  外部地圖查看 ↗
+                  外部地圖查看 <ArrowUpRightIcon size={13} />
                 </a>
               </div>
             </div>
@@ -654,7 +661,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
           {/* New Spot Form */}
           {isMarkingMode && !pendingStopTargetId && (
             <form className="map-add-form" onSubmit={handleCreateMarkedStop}>
-              <h4>⚲ 標記並新增景點</h4>
+              <h4><MapPinIcon size={15} /> 標記並新增景點</h4>
               <p className="form-subtext">在左側街道地圖上點擊以獲取精確經緯度。</p>
 
               <label>
@@ -758,7 +765,7 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
             <div className="map-spots-scroll">
               {displayedStops.length === 0 ? (
                 <div className="empty-spots-notice">
-                  <span>⚲</span>
+                  <span><MapPinIcon size={24} /></span>
                   <p>這一天目前沒有安排景點。</p>
                 </div>
               ) : (
@@ -782,9 +789,9 @@ export function TripMapPanel({ trip, authRole, onUpdateTrip }: TripMapPanelProps
 
                         <div className="spot-status-row">
                           {hasCoords ? (
-                            <span className="status-tag tagged">✓ 已標記座標</span>
+                            <span className="status-tag tagged"><CheckIcon size={11} /> 已標記座標</span>
                           ) : (
-                            <span className="status-tag untagged">✕ 尚無座標</span>
+                            <span className="status-tag untagged"><CloseIcon size={11} /> 尚無座標</span>
                           )}
 
                           {authRole === 'admin' && !hasCoords && (

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { defineTrip, type Trip } from '@travel/shared'
+import { CloseIcon } from './Icons'
 
 const COMMON_TIMEZONES = [
   'Asia/Tokyo',
@@ -95,7 +96,7 @@ export function CreateTripModal({ defaultTimeZone = 'Asia/Tokyo', onClose, onCre
             <span className="overline">NEW JOURNEY</span>
             <h2 id="create-trip-title">新增旅程</h2>
           </div>
-          <button type="button" className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>
+          <button type="button" className="modal-close" aria-label="關閉" onClick={onClose}><CloseIcon size={16} /></button>
         </div>
         <p className="modal-subtitle">可建立未來的出國計畫，或補登過去已結束的歷史行程（會自動歸類至「封存」與「旅程時間軸」）。</p>
         <form className="modal-form" onSubmit={handleSubmit}>
