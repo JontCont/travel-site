@@ -25,6 +25,7 @@ import {
   ClockIcon,
   CloseIcon,
   CodeBracesIcon,
+  CompassRocketIcon,
   HotelIcon,
   KeyShieldIcon,
   MapPinIcon,
@@ -103,33 +104,175 @@ type AccessGateProps = {
 }
 
 function AccessGate({ configured, error, busy, code, onCodeChange, onSubmit, onSynologyLogin }: AccessGateProps) {
-  return <main className="access-page">
-    <section className="access-card">
-      <div className="access-brand"><span className="brand-mark"><BrandSparkIcon size={18} /></span><span>途間 <small>TRIP STUDIO</small></span></div>
-      <span className="overline">PRIVATE TRAVEL SPACE</span>
-      <h1>旅程只和同行的人分享。</h1>
-      <p className="access-description">使用 Synology 帳號登入，或輸入管理員提供的訪客通行碼。NAS 管理員可以編輯旅程並發放通行碼。</p>
-      {error && <p className="access-error" role="alert">{error}</p>}
-      {!configured ? <p className="access-setup">{error ? '目前無法確認 NAS 登入服務狀態，請檢查伺服器與反向代理設定。' : <>NAS 尚未設定 Synology 登入。請在 <code>.env</code> 設定 <code>TRIP_OIDC_*</code> 後重新啟動網站。</>}</p>       : <div className="access-methods">
-             <form onSubmit={onSubmit}>
-               <label htmlFor="access-code">訪客通行碼</label>
-               <input
-                 id="access-code"
-                 type="password"
-                 autoComplete="off"
-                 required
-                 value={code}
-                 onChange={(event) => onCodeChange(event.target.value)}
-                 placeholder="輸入通行碼"
-               />
-               <button type="submit" className="access-method" disabled={busy}>{busy ? '正在登入…' : '通行碼'}</button>
-             </form>
-             <div className="access-divider"><span>或</span></div>
-             <button type="button" className="access-method primary" onClick={onSynologyLogin}>Synology 登入</button>
-           </div>}
-      <p className="access-footnote">Synology 密碼只在 NAS 登入頁輸入，本站不會取得。通行碼只以雜湊形式保存在旅程資料庫，登入狀態以 HttpOnly Cookie 保存。</p>
-    </section>
-  </main>
+  const loginCardRef = useRef<HTMLElement>(null)
+
+  function focusLoginCard() {
+    loginCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const input = document.getElementById('access-code')
+    input?.focus()
+  }
+
+  return (
+    <main className="access-page landing-home">
+      <div className="landing-backdrop" aria-hidden="true">
+        <span className="ambient-orb orb-1" />
+        <span className="ambient-orb orb-2" />
+        <span className="ambient-orb orb-3" />
+        <div className="bg-grid-pattern" />
+      </div>
+
+      <header className="landing-header">
+        <div className="access-brand landing-brand">
+          <span className="brand-mark"><BrandSparkIcon size={18} /></span>
+          <span>途間 <small>TRIP STUDIO</small></span>
+        </div>
+        <div className="landing-header-meta">
+          <span className="live-pill"><span className="pulse-dot" /> PRIVATE NAS WORKSPACE</span>
+          <button type="button" className="landing-cta-link" onClick={focusLoginCard}>
+            進入旅程 <ArrowRightIcon size={14} />
+          </button>
+        </div>
+      </header>
+
+      <div className="landing-layout">
+        <section className="landing-showcase" aria-label="途間品牌與旅程視覺首頁">
+          <div className="landing-hero-copy">
+            <div className="landing-eyebrow">
+              <span className="compass-spin"><CompassRocketIcon size={15} /></span>
+              <span>CURATED JOURNEYS &amp; WALKABLE ROUTES</span>
+            </div>
+            <h1 className="landing-headline">
+              把每一次啟程，
+              <span className="headline-highlight">收藏成專屬的風景。</span>
+            </h1>
+            <p className="landing-lead">
+              途間（Trip Studio）是專為同行旅伴打造的私人行程工作區。從航班、住宿、每日時間軸到步行友善路線與相簿，在同一個靜謐空間裡從容規劃。
+            </p>
+          </div>
+
+          <div className="scenic-stage" aria-hidden="true">
+            <div className="scenic-sky">
+              <div className="scenic-sun-wrap">
+                <span className="scenic-sun-halo" />
+                <span className="scenic-sun-ring" />
+                <span className="scenic-sun" />
+              </div>
+
+              <div className="scenic-cloud cloud-1" />
+              <div className="scenic-cloud cloud-2" />
+              <div className="scenic-cloud cloud-3" />
+
+              <svg className="scenic-flight-svg" viewBox="0 0 560 220" fill="none">
+                <path
+                  className="flight-arc-bg"
+                  d="M 48 168 C 165 38, 360 32, 496 122"
+                />
+                <path
+                  className="flight-arc-dash"
+                  d="M 48 168 C 165 38, 360 32, 496 122"
+                />
+                <circle className="flight-node origin" cx="48" cy="168" r="5" />
+                <circle className="flight-node mid" cx="268" cy="64" r="4" />
+                <circle className="flight-node dest" cx="496" cy="122" r="5" />
+              </svg>
+
+              <div className="floating-plane-track">
+                <span className="floating-plane">
+                  <PlaneIcon size={18} />
+                </span>
+              </div>
+
+              <div className="map-pin-float pin-tokyo">
+                <span className="pin-pulse" />
+                <span className="pin-badge"><MapPinIcon size={12} /> KYOTO · 09:30</span>
+              </div>
+              <div className="map-pin-float pin-shanghai">
+                <span className="pin-pulse" />
+                <span className="pin-badge"><SparkleIcon size={12} /> WALKABLE · 1.2 KM</span>
+              </div>
+
+              <div className="compass-rose">
+                <div className="compass-ring" />
+                <span className="compass-needle"><CompassRocketIcon size={22} /></span>
+              </div>
+
+              <div className="scenic-hill hill-back" />
+              <div className="scenic-hill hill-mid" />
+              <div className="scenic-hill hill-front" />
+              <div className="scenic-cityline">
+                <span className="b-tower t-1" />
+                <span className="b-tower t-2" />
+                <span className="b-tower t-3" />
+              </div>
+            </div>
+
+            <div className="scenic-preview-bar">
+              <div className="preview-route-nodes">
+                <span className="route-node active"><span className="node-dot" /> DAY 01 · 抵達與古街漫步</span>
+                <span className="route-connector" />
+                <span className="route-node"><span className="node-dot" /> DAY 02 · 美術館與河畔晚餐</span>
+                <span className="route-connector" />
+                <span className="route-node"><span className="node-dot" /> DAY 03 · 返程航班</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="landing-features" aria-label="核心特色">
+            <article className="feature-card">
+              <span className="feature-icon peach"><CalendarGridIcon size={18} /></span>
+              <div>
+                <strong>直覺每日時間軸</strong>
+                <p>航班、景點停留、營業時間核實與時段衝突提醒一目了然。</p>
+              </div>
+            </article>
+            <article className="feature-card">
+              <span className="feature-icon green"><MapPinIcon size={18} /></span>
+              <div>
+                <strong>步行友善與雙地圖</strong>
+                <p>自動串聯 Google Maps 與高德地圖，輕鬆掌控每段移動距離。</p>
+              </div>
+            </article>
+            <article className="feature-card">
+              <span className="feature-icon blue"><UsersIcon size={18} /></span>
+              <div>
+                <strong>同行旅伴私密共享</strong>
+                <p>支援訪客唯讀通行碼、共用記事本與旅程相簿，資料自主保存於 NAS。</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section className="access-card landing-auth-card" ref={loginCardRef} aria-label="登入與通行碼驗證">
+          <div className="auth-card-glow" aria-hidden="true" />
+          <div className="access-brand"><span className="brand-mark"><BrandSparkIcon size={18} /></span><span>途間 <small>TRIP STUDIO</small></span></div>
+          <span className="overline">PRIVATE TRAVEL SPACE</span>
+          <h2>旅程只和同行的人分享。</h2>
+          <p className="access-description">使用 Synology 帳號登入，或輸入管理員提供的訪客通行碼。NAS 管理員可以編輯旅程並發放通行碼。</p>
+          {error && <p className="access-error" role="alert">{error}</p>}
+          {!configured ? <p className="access-setup">{error ? '目前無法確認 NAS 登入服務狀態，請檢查伺服器與反向代理設定。' : <>NAS 尚未設定 Synology 登入。請在 <code>.env</code> 設定 <code>TRIP_OIDC_*</code> 後重新啟動網站。</>}</p> : <div className="access-methods">
+            <form onSubmit={onSubmit}>
+              <label htmlFor="access-code">訪客通行碼</label>
+              <input
+                id="access-code"
+                type="password"
+                autoComplete="off"
+                required
+                value={code}
+                onChange={(event) => onCodeChange(event.target.value)}
+                placeholder="輸入通行碼"
+              />
+              <button type="submit" className="access-method ripple-btn" disabled={busy}>{busy ? '正在登入…' : '通行碼登入'}</button>
+            </form>
+            <div className="access-divider"><span>或</span></div>
+            <button type="button" className="access-method primary ripple-btn" onClick={onSynologyLogin}>
+              <KeyShieldIcon size={15} /> Synology 帳號登入
+            </button>
+          </div>}
+          <p className="access-footnote">Synology 密碼只在 NAS 登入頁輸入，本站不會取得。通行碼只以雜湊形式保存在旅程資料庫，登入狀態以 HttpOnly Cookie 保存。</p>
+        </section>
+      </div>
+    </main>
+  )
 }
 
 type NotepadPanelProps = {
@@ -811,13 +954,45 @@ function App() {
               </Suspense>
             </section>
           ) : tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
-            <div className="eyebrow">MY TRIPS <span className="eyebrow-rule" /></div>
+            <div className="overview-hero-banner">
+              <div className="overview-hero-copy">
+                <div className="eyebrow">
+                  <span className="compass-spin"><CompassRocketIcon size={14} /></span>
+                  <span>MY TRIPS · {workspace.trips.length} JOURNEYS</span>
+                  <span className="eyebrow-rule" />
+                </div>
+                <h2>每一趟旅程，都從這裡開始。</h2>
+                <p className="overview-caption">管理你的出國計畫，選取旅程以查看每日安排、步行路線與同行資訊。</p>
+                <div className="overview-hero-stats">
+                  <span className="stat-chip"><span className="pulse-dot" /> 進行與排定 <strong>{currentTrips.length}</strong></span>
+                  <span className="stat-chip">已封存 <strong>{archivedTrips.length}</strong></span>
+                  {authRole === 'admin' && (
+                    <button type="button" className="small-action ripple-btn" onClick={() => setCreateTripOpen(true)}>
+                      <PlusIcon size={14} /> 新增旅程
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="overview-hero-scene" aria-hidden="true">
+                <span className="sun" />
+                <span className="scenic-cloud cloud-1" />
+                <span className="scenic-cloud cloud-2" />
+                <svg className="overview-flight-svg" viewBox="0 0 340 130" fill="none">
+                  <path className="flight-arc-bg" d="M 24 106 C 110 24, 225 22, 312 82" />
+                  <path className="flight-arc-dash" d="M 24 106 C 110 24, 225 22, 312 82" />
+                  <circle className="flight-node origin" cx="24" cy="106" r="4" />
+                  <circle className="flight-node dest" cx="312" cy="82" r="4" />
+                </svg>
+                <span className="overview-floating-plane"><PlaneIcon size={15} /></span>
+                <div className="hill hill-one" />
+                <div className="hill hill-two" />
+              </div>
+            </div>
             <nav className="tabs home-tabs" aria-label="旅程總覽檢視">
               <button className={tab === 'overview' ? 'selected' : ''} onClick={() => setTab('overview')}>旅程卡片</button>
               <button className={tab === 'timeline' ? 'selected' : ''} onClick={() => setTab('timeline')}>旅程時間軸</button>
               <button className={tab === 'archive' ? 'selected' : ''} onClick={() => setTab('archive')}>封存</button>
             </nav>
-            <div className="section-heading"><div><span className="overline">旅程總覽 · {workspace.trips.length} 趟</span><h2>每一趟旅程，都從這裡開始。</h2><p className="overview-caption">管理你的出國計畫，選取旅程以查看每日安排。</p></div>{authRole === 'admin' && <button type="button" className="small-action" onClick={() => setCreateTripOpen(true)}><PlusIcon size={14} /> 新增旅程</button>}</div>
             {tab === 'overview' && renderTripCards(currentTrips)}
             {tab === 'timeline' && <div className="journey-timeline">
               {sortTripsNearToFar(workspace.trips, statusTime).map((item) => {
@@ -843,7 +1018,21 @@ function App() {
               <p>{trip.description || `開始規劃你的${trip.destination}旅程。`}</p>
               <div className="hero-meta"><span><ClockIcon size={14} /> {trip.startDate.replaceAll('-', '.')} — {trip.endDate.slice(5).replaceAll('-', '.')}</span><span><ClockIcon size={14} /> 當地時間 {trip.timeZone}</span></div>
             </div>
-            <div className="hero-illustration" aria-hidden="true"><span className="sun" /><div className="hill hill-one" /><div className="hill hill-two" /><div className="building building-one" /><div className="building building-two" /></div>
+            <div className="hero-illustration" aria-hidden="true">
+              <span className="sun" />
+              <span className="scenic-cloud cloud-1" />
+              <span className="scenic-cloud cloud-2" />
+              <svg className="hero-flight-svg" viewBox="0 0 420 180" fill="none">
+                <path className="flight-arc-bg" d="M 30 145 C 145 35, 275 30, 385 95" />
+                <path className="flight-arc-dash" d="M 30 145 C 145 35, 275 30, 385 95" />
+                <circle className="flight-node origin" cx="30" cy="145" r="4" />
+                <circle className="flight-node dest" cx="385" cy="95" r="4" />
+              </svg>
+              <div className="hill hill-one" />
+              <div className="hill hill-two" />
+              <div className="building building-one" />
+              <div className="building building-two" />
+            </div>
             <div className="hero-index">{String(workspace.trips.indexOf(trip) + 1).padStart(2, '0')} / {trip.destination.toUpperCase()}</div>
           </section>
           <div className="summary-row">
