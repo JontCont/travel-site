@@ -917,7 +917,7 @@ function App() {
           <div className="topbar-left">
             <button className="mobile-menu-button" aria-label="選單" onClick={() => setMobileNavOpen((open) => !open)}>{mobileNavOpen ? <CloseIcon size={18} /> : <MenuIcon size={18} />}</button>
             {tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}><ChevronLeftIcon size={15} /> 我的旅程</button>}
-            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'docs' ? '系統 / 使用手冊與說明文件' : tab === 'access' ? '管理 / 訪客通行碼' : tab === 'json-editor' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> JSON 編輯器</> : tab === 'map' ? <>我的旅程 <span className="slash">/</span> {trip.title} <span className="slash">/</span> 地點地圖</> : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
+            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'docs' ? '系統 / 使用手冊與說明文件' : tab === 'access' ? '管理 / 訪客通行碼' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
           </div>
           <span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span>
           <button className="logout-button" onClick={() => void handleLogout()}>登出</button>
@@ -931,28 +931,6 @@ function App() {
             </Suspense>
           ) : tab === 'access' && authRole === 'admin' ? (
             <AccessCodePanel trips={workspace.trips} />
-          ) : tab === 'json-editor' && authRole === 'admin' ? (
-            <section className="json-editor-section">
-              <div className="section-heading">
-                <div>
-                  <span className="overline">VS CODE JSON EDITOR</span>
-                  <h2>JSON 行程編輯器</h2>
-                  <p className="overview-caption">使用 VS Code 核心編輯器檢視與修改行程 JSON，支援語法驗證、排版對齊與快捷鍵 (Ctrl+S)。</p>
-                </div>
-              </div>
-              <Suspense fallback={<div className="load-error">正在載入 VS Code 核心編輯器…</div>}>
-                <JsonEditorPanel
-                  workspace={workspace}
-                  activeTrip={trip}
-                  onUpdateTrip={(updatedTrip) => {
-                    updateTrip(() => updatedTrip)
-                  }}
-                  onUpdateWorkspace={(updatedWorkspace) => {
-                    setWorkspace(updatedWorkspace)
-                  }}
-                />
-              </Suspense>
-            </section>
           ) : tab === 'overview' || tab === 'timeline' || tab === 'archive' ? <section className="trips-overview">
             <div className="overview-hero-banner">
               <div className="overview-hero-copy">
@@ -1226,6 +1204,30 @@ function App() {
             onAdminChange={(value) => updateTrip((current) => ({ ...current, notepad: value }))}
             onViewerSaved={updateViewerNotepad}
           />}
+          {tab === 'json-editor' && authRole === 'admin' && (
+            <section className="json-editor-section">
+              <div className="section-heading">
+                <div>
+                  <span className="overline">VS CODE JSON EDITOR</span>
+                  <h2>JSON 行程編輯器</h2>
+                </div>
+              </div>
+              <p className="muted">使用 VS Code 核心編輯器檢視與修改行程 JSON，支援語法驗證、排版對齊與快捷鍵 (Ctrl+S)。</p>
+              <Suspense fallback={<div className="load-error">正在載入 VS Code 核心編輯器…</div>}>
+                <JsonEditorPanel
+                  key={trip.id}
+                  workspace={workspace}
+                  activeTrip={trip}
+                  onUpdateTrip={(updatedTrip) => {
+                    updateTrip(() => updatedTrip)
+                  }}
+                  onUpdateWorkspace={(updatedWorkspace) => {
+                    setWorkspace(updatedWorkspace)
+                  }}
+                />
+              </Suspense>
+            </section>
+          )}
           </>}
         </div>
       </main>
