@@ -9,6 +9,14 @@ import {
   type Trip,
   type TripWorkspace,
 } from '@travel/shared'
+import {
+  BoltIcon,
+  CheckIcon,
+  CloseIcon,
+  CodeBracesIcon,
+  RotateCcwIcon,
+  SaveIcon,
+} from './Icons'
 
 // Use locally installed monaco-editor for offline/private deployment
 loader.config({ monaco })
@@ -263,7 +271,7 @@ export function JsonEditorPanel({
       <div className="vscode-titlebar">
         <div className="vscode-tabs">
           <div className="vscode-tab active">
-            <span className="vscode-tab-icon">{'{ }'}</span>
+            <span className="vscode-tab-icon"><CodeBracesIcon size={15} /></span>
             <span className="vscode-tab-title">
               {mode === 'trip' ? `trip-${activeTrip.id.slice(0, 8)}.json` : 'workspace.json'}
             </span>
@@ -297,7 +305,7 @@ export function JsonEditorPanel({
             onClick={handlePrettify}
             title="格式化 JSON (排版對齊)"
           >
-            ⚡ 格式化
+            <BoltIcon size={13} /> 格式化
           </button>
           <button
             type="button"
@@ -306,7 +314,7 @@ export function JsonEditorPanel({
             disabled={!dirty}
             title="還原回上次儲存的內容"
           >
-            ↺ 還原
+            <RotateCcwIcon size={13} /> 還原
           </button>
           <button
             type="button"
@@ -314,7 +322,7 @@ export function JsonEditorPanel({
             onClick={handleSave}
             title="儲存並同步至行程 (Ctrl+S)"
           >
-            💾 儲存並套用
+            <SaveIcon size={13} /> 儲存並套用
           </button>
         </div>
       </div>
@@ -355,7 +363,7 @@ export function JsonEditorPanel({
       {!validation.valid && (
         <div className="vscode-problems-panel">
           <div className="vscode-problems-header">
-            <span className="error-icon">✕</span>
+            <span className="error-icon"><CloseIcon size={10} /></span>
             <strong>驗證未通過 ({validation.errors.length} 項問題)：</strong>
           </div>
           <ul className="vscode-problems-list">
@@ -374,10 +382,10 @@ export function JsonEditorPanel({
               dirty ? (
                 <>● 尚未儲存 (按 Ctrl+S 儲存)</>
               ) : (
-                <>✓ JSON 格式與結構驗證通過</>
+                <><CheckIcon size={12} /> JSON 格式與結構驗證通過</>
               )
             ) : (
-              <>✕ 結構或語法有誤 ({validation.errors.length} 個問題)</>
+              <><CloseIcon size={12} /> 結構或語法有誤 ({validation.errors.length} 個問題)</>
             )}
           </span>
           <span className="status-item">模式：{mode === 'trip' ? '單一旅程' : '完整資料庫'}</span>

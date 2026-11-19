@@ -1,9 +1,22 @@
 import { useState, useMemo } from 'react'
+import {
+  AlertTriangleIcon,
+  CalendarGridIcon,
+  CloseIcon,
+  CodeBracesIcon,
+  CompassRocketIcon,
+  HelpCircleIcon,
+  InfoCircleIcon,
+  KeyShieldIcon,
+  MapPinIcon,
+  PlaneIcon,
+  SearchIcon,
+} from './Icons'
 
 interface DocSection {
   id: string
   title: string
-  icon: string
+  icon: React.ReactNode
   category: string
   badge?: string
   content: React.ReactNode
@@ -18,7 +31,7 @@ export function DocsPanel() {
       {
         id: 'getting-started',
         title: '快速入門與介面導覽',
-        icon: '🚀',
+        icon: <CompassRocketIcon size={20} />,
         category: '入門',
         content: (
           <div className="doc-article">
@@ -28,7 +41,7 @@ export function DocsPanel() {
 
             <div className="doc-grid-2">
               <div className="doc-feature-card">
-                <h4>🗂 旅程總覽與時間軸</h4>
+                <h4>旅程總覽與時間軸</h4>
                 <p>首頁提供兩種檢視模式：</p>
                 <ul>
                   <li><strong>旅程卡片</strong>：卡片式陳列進行中與預定的旅程，可直觀查看目的地、天數、景點數與當地時區。</li>
@@ -37,7 +50,7 @@ export function DocsPanel() {
               </div>
 
               <div className="doc-feature-card">
-                <h4>🛡 角色與權限機制</h4>
+                <h4>角色與權限機制</h4>
                 <ul>
                   <li><strong>系統管理員 (Admin)</strong>：擁有最高權限，可建立與編輯行程、管理景點座標、發放訪客通行碼、使用 VS Code JSON 編輯器直接調整資料庫。</li>
                   <li><strong>一般訪客 (Viewer)</strong>：使用訪客通行碼或 DSM 一般帳號登入，僅能檢視被授權的旅程，並擁有個人的獨立記事本。</li>
@@ -46,7 +59,7 @@ export function DocsPanel() {
             </div>
 
             <div className="doc-callout info">
-              <span className="callout-icon">💡</span>
+              <span className="callout-icon"><InfoCircleIcon size={18} /></span>
               <div>
                 <strong>行動裝置支援</strong>：系統針對手機與平板進行完整響應式優化，包含平滑橫向滾動的每日分頁、可收合的抽屜式側邊選單與友善的觸控點擊熱區。
               </div>
@@ -57,7 +70,7 @@ export function DocsPanel() {
       {
         id: 'itinerary',
         title: '每日行程與景點規劃',
-        icon: '▦',
+        icon: <CalendarGridIcon size={20} />,
         category: '行程',
         badge: '核心功能',
         content: (
@@ -101,7 +114,7 @@ export function DocsPanel() {
             </div>
 
             <div className="doc-callout warning">
-              <span className="callout-icon">⚠️</span>
+              <span className="callout-icon"><AlertTriangleIcon size={18} /></span>
               <div>
                 <strong>時段衝突警示</strong>：當相鄰景點的停留時間與下一個景點重疊，或與當日起飛/返程航班時間衝突時，系統會以顯眼的橘紅色橫條提醒調整預留時間。
               </div>
@@ -112,7 +125,7 @@ export function DocsPanel() {
       {
         id: 'location-map',
         title: '地點地圖與座標標記 (React Simple Maps)',
-        icon: '⚲',
+        icon: <MapPinIcon size={20} />,
         category: '地圖',
         badge: '新增',
         content: (
@@ -123,18 +136,18 @@ export function DocsPanel() {
 
             <div className="doc-grid-2">
               <div className="doc-feature-card">
-                <h4>🗺 向量圖層與路線軌跡</h4>
+                <h4>向量圖層與路線軌跡</h4>
                 <ul>
                   <li><strong>順序標記圖釘</strong>：地圖上以帶數字的圓形圖釘（<code>1</code>、<code>2</code>、<code>3</code>...）標示每日景點造訪順序。</li>
-                  <li><strong>住宿圖釘</strong>：若已填寫住宿飯店座標，會顯示專屬飯店標記（<code>⌂</code>）。</li>
+                  <li><strong>住宿圖釘</strong>：若已填寫住宿飯店座標，會顯示專屬飯店標記。</li>
                   <li><strong>每日路線虛線</strong>：切換至單日檢視時，地圖會自動繪製連接各景點的行走路徑虛線。</li>
                 </ul>
               </div>
 
               <div className="doc-feature-card">
-                <h4>🎯 點擊地圖標記新地點</h4>
+                <h4>點擊地圖標記新地點</h4>
                 <ul>
-                  <li><strong>地圖點選拾取座標</strong>：點擊「⚲ 標記新地點」進入標記模式，在世界地圖上任一點按即可精準捕獲經緯度（精確度達小數點後 5 位）。</li>
+                  <li><strong>地圖點選拾取座標</strong>：點擊「標記新地點」進入標記模式，在世界地圖上任一點按即可精準捕獲經緯度（精確度達小數點後 5 位）。</li>
                   <li><strong>直接新增景點</strong>：右側表單會自動代入座標，填入名稱與時間後可直接存入指定天數。</li>
                   <li><strong>現有景點補齊座標</strong>：清單中未帶座標的景點可點「點地圖標記」，在地圖上點一下立即完成座標綁定。</li>
                 </ul>
@@ -142,9 +155,9 @@ export function DocsPanel() {
             </div>
 
             <div className="doc-callout info">
-              <span className="callout-icon">💡</span>
+              <span className="callout-icon"><InfoCircleIcon size={18} /></span>
               <div>
-                <strong>視角操控技巧</strong>：地圖支援使用滑鼠滾輪或右上角 <code>＋</code> / <code>−</code> 縮放，滑鼠左鍵可拖曳平移地圖；點選 <code>⌖ 重設</code> 可瞬間將視角自動置中於當前旅程的所有景點分佈。
+                <strong>視角操控技巧</strong>：地圖支援使用滑鼠滾輪或右上角 <code>＋</code> / <code>−</code> 縮放，滑鼠左鍵可拖曳平移地圖；點選 <code>置中對齊</code> 可瞬間將視角自動置中於當前旅程的所有景點分佈。
               </div>
             </div>
           </div>
@@ -153,7 +166,7 @@ export function DocsPanel() {
       {
         id: 'json-editor',
         title: 'VS Code 核心 Monaco JSON 行程編輯器',
-        icon: '{ }',
+        icon: <CodeBracesIcon size={20} />,
         category: '編輯器',
         badge: '進階',
         content: (
@@ -164,7 +177,7 @@ export function DocsPanel() {
 
             <div className="doc-grid-2">
               <div className="doc-feature-card">
-                <h4>📑 雙重模式切換</h4>
+                <h4>雙重模式切換</h4>
                 <ul>
                   <li><strong>當前旅程 (<code>trip-xxxx.json</code>)</strong>：只聚焦在當前選取的旅程，可直接批次修改每日景點、日期、航班、住宿或行李欄位。</li>
                   <li><strong>全部工作區 (<code>workspace.json</code>)</strong>：展開整個資料庫結構，適合將舊行程快速匯入或備份。</li>
@@ -172,7 +185,7 @@ export function DocsPanel() {
               </div>
 
               <div className="doc-feature-card">
-                <h4>🛡 即時診斷與防呆防護</h4>
+                <h4>即時診斷與防呆防護</h4>
                 <ul>
                   <li><strong>語法驗證</strong>：即時提示 JSON 括號或逗點語法錯誤。</li>
                   <li><strong>結構防呆</strong>：自動比對 DTO 定義，若日期格式不符 (非 <code>YYYY-MM-DD</code>)、<code>endDate</code> 早於 <code>startDate</code> 或缺少必要 key，下方會彈出詳細問題清單並阻止儲存，確保資料庫安全。</li>
@@ -197,12 +210,12 @@ export function DocsPanel() {
                     <td>在編輯器內隨時按下即可完成驗證並同步寫入 SQLite 資料庫。</td>
                   </tr>
                   <tr>
-                    <td><kbd>Shift</kbd> + <kbd>Alt</kbd> + <kbd>F</kbd> 或點擊 <code>⚡ 格式化</code></td>
+                    <td><kbd>Shift</kbd> + <kbd>Alt</kbd> + <kbd>F</kbd> 或點擊 <code>格式化</code></td>
                     <td><strong>自動排版</strong></td>
                     <td>依 2 格縮排標準自動對齊所有 JSON 節點。</td>
                   </tr>
                   <tr>
-                    <td>點擊 <code>↺ 還原</code></td>
+                    <td>點擊 <code>還原</code></td>
                     <td><strong>放棄修改</strong></td>
                     <td>還原至資料庫目前保存的最新內容。</td>
                   </tr>
@@ -215,7 +228,7 @@ export function DocsPanel() {
       {
         id: 'flights-hotel',
         title: '航班、住宿與行李額度',
-        icon: '✈',
+        icon: <PlaneIcon size={20} />,
         category: '行程',
         content: (
           <div className="doc-article">
@@ -225,7 +238,7 @@ export function DocsPanel() {
 
             <div className="doc-grid-3">
               <div className="doc-feature-card">
-                <h4>✈ 航班資訊</h4>
+                <h4>航班資訊</h4>
                 <p>分別呈現去程與回程航班：</p>
                 <ul>
                   <li>航空公司與航班號碼</li>
@@ -235,7 +248,7 @@ export function DocsPanel() {
               </div>
 
               <div className="doc-feature-card">
-                <h4>🧳 每人行李額度</h4>
+                <h4>每人行李額度</h4>
                 <p>各航空公司限制一目了然：</p>
                 <ul>
                   <li><strong>個人物品</strong>：背包/隨身包件數</li>
@@ -245,7 +258,7 @@ export function DocsPanel() {
               </div>
 
               <div className="doc-feature-card">
-                <h4>🏨 入住住宿細節</h4>
+                <h4>入住住宿細節</h4>
                 <p>入住資訊與便利導航：</p>
                 <ul>
                   <li>飯店中文與英文名稱</li>
@@ -261,7 +274,7 @@ export function DocsPanel() {
       {
         id: 'access-control',
         title: '訪客通行碼與權限管理',
-        icon: '◈',
+        icon: <KeyShieldIcon size={20} />,
         category: '管理',
         content: (
           <div className="doc-article">
@@ -296,7 +309,7 @@ export function DocsPanel() {
             </div>
 
             <div className="doc-callout info">
-              <span className="callout-icon">🔒</span>
+              <span className="callout-icon"><KeyShieldIcon size={18} /></span>
               <div>
                 <strong>安全儲存規範</strong>：訪客通行碼在伺服器端均以安全單向雜湊保存，原始通行碼僅在建立當下顯示一次，資料庫不會明文存放。
               </div>
@@ -307,7 +320,7 @@ export function DocsPanel() {
       {
         id: 'faq',
         title: '常見問題 FAQ',
-        icon: '❓',
+        icon: <HelpCircleIcon size={20} />,
         category: 'FAQ',
         content: (
           <div className="doc-article">
@@ -379,7 +392,7 @@ export function DocsPanel() {
 
         {/* Search Input */}
         <div className="docs-search-box">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon"><SearchIcon size={15} /></span>
           <input
             type="text"
             placeholder="搜尋功能、操作步驟或說明..."
@@ -392,7 +405,7 @@ export function DocsPanel() {
               className="clear-search-btn"
               onClick={() => setSearchQuery('')}
             >
-              ✕
+              <CloseIcon size={14} />
             </button>
           )}
         </div>
@@ -439,7 +452,7 @@ export function DocsPanel() {
         <div className="docs-content-area">
           {filteredSections.length === 0 ? (
             <div className="docs-empty">
-              <span>🔍</span>
+              <span><SearchIcon size={32} /></span>
               <h4>找不到符合「{searchQuery}」的說明文件</h4>
               <p>請嘗試使用其他關鍵字（如：地圖、座標、JSON、航班、通行碼）。</p>
             </div>
