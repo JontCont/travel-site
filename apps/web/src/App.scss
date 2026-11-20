@@ -2974,3 +2974,38 @@
 
 
 
+
+/* Skeleton loading (Facebook-style shimmer) */
+.skeleton { display: block; background: linear-gradient(90deg, #e6ece4 25%, #f3f6f1 37%, #e6ece4 63%); background-size: 400% 100%; animation: skeletonShimmer 1.4s ease infinite; border-radius: 8px; }
+@keyframes skeletonShimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+.skeleton-line { height: 14px; }
+.skeleton-circle { width: 38px; height: 38px; border-radius: 50%; }
+.skeleton-hero { height: 220px; border-radius: 16px; }
+.skeleton-card { height: 90px; flex: 1; border-radius: 12px; }
+.w-20 { width: 20%; } .w-30 { width: 30%; } .w-60 { width: 60%; }
+.skeleton-rows { display: grid; gap: 10px; }
+.skeleton-row { display: flex; gap: 16px; align-items: center; padding: 18px; background: white; border: 1px solid #e8ede6; border-radius: 10px; }
+.page-skeleton { display: flex; min-height: 100vh; background: #f8f9f6; }
+.page-skeleton-side { width: 282px; padding: 32px 22px; display: grid; align-content: start; gap: 22px; background: #1f4a37; }
+.page-skeleton-side .skeleton { background: linear-gradient(90deg, #2b5b46 25%, #3a6c56 37%, #2b5b46 63%); background-size: 400% 100%; animation: skeletonShimmer 1.4s ease infinite; }
+.page-skeleton-main { flex: 1; padding: 48px 6vw; display: grid; align-content: start; gap: 22px; }
+.page-skeleton-cards { display: flex; gap: 18px; }
+.skeleton-caption { color: #9aaa9d; font-size: 12px; text-align: center; }
+@media (max-width: 800px) { .page-skeleton-side { display: none; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* Access code table */
+.access-list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.access-list-head h3 small { color: #9aaa9d; font-weight: 400; font-size: 12px; margin-left: 6px; }
+.access-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.access-filters input, .access-filters select { padding: 7px 10px; border: 1px solid #dfe7dc; border-radius: 8px; background: white; font-size: 13px; }
+.access-table-wrap { overflow-x: auto; border: 1px solid #e8ede6; border-radius: 10px; background: white; }
+.access-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.access-table th { text-align: left; padding: 10px 14px; color: #9aaa9d; font-size: 11px; font-weight: 600; background: #f6f8f4; }
+.access-table td { padding: 12px 14px; border-top: 1px solid #eef2ec; color: #66806b; vertical-align: middle; }
+.access-table td strong { color: #254935; }
+.access-trips-cell { max-width: 280px; overflow-wrap: anywhere; }
+.access-table tr.is-expired .access-expiry { color: #a84639; }
+.access-table .access-code-actions { white-space: nowrap; text-align: right; }
+.access-edit-row td { background: #fafbf8; }
+.access-pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 14px; font-size: 12px; color: #66806b; }

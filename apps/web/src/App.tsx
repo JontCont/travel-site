@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, lazy, Suspense, type FormEvent } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, lazy, Suspense, type FormEvent } from 'react'
 import {
   buildGoogleDirectionsUrl,
   buildTripMapSearchUrl,
@@ -368,6 +368,27 @@ function sameTripIds(left: string[], right: string[]) {
   return left.length === right.length && left.every((id) => right.includes(id))
 }
 
+function SkeletonRows({ count = 3 }: { count?: number }) {
+  return <div className="skeleton-rows" role="status" aria-label="載入中">
+    {Array.from({ length: count }, (_, index) => <div className="skeleton-row" key={index}><span className="skeleton skeleton-line w-30" /><span className="skeleton skeleton-line w-60" /><span className="skeleton skeleton-line w-20" /></div>)}
+  </div>
+}
+
+function PageSkeleton({ message }: { message: string }) {
+  return <main className="page-skeleton" role="status" aria-live="polite" aria-label={message}>
+    <aside className="page-skeleton-side">
+      <span className="skeleton skeleton-circle" />
+      {Array.from({ length: 6 }, (_, index) => <span className="skeleton skeleton-line" key={index} />)}
+    </aside>
+    <div className="page-skeleton-main">
+      <span className="skeleton skeleton-line w-30" />
+      <span className="skeleton skeleton-hero" />
+      <div className="page-skeleton-cards"><span className="skeleton skeleton-card" /><span className="skeleton skeleton-card" /><span className="skeleton skeleton-card" /></div>
+      <span className="skeleton-caption">{message}</span>
+    </div>
+  </main>
+}
+
 function AccessCodePanel({ trips }: AccessCodePanelProps) {
   const [codes, setCodes] = useState<AccessCodeSummary[]>([])
   const [loadingCodes, setLoadingCodes] = useState(true)
@@ -386,6 +407,11 @@ function AccessCodePanel({ trips }: AccessCodePanelProps) {
   const [editExpiry, setEditExpiry] = useState('unchanged')
   const [savingId, setSavingId] = useState<string | null>(null)
   const [editError, setEditError] = useState('')
+  const [query, setQuery] = useState('')
+  const [yearFilter, setYearFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [pageSize, setPageSize] = useState(10)
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     let cancelled = false
@@ -493,6 +519,21 @@ function AccessCodePanel({ trips }: AccessCodePanelProps) {
     }
   }
 
+  const years = useMemo(() => [...new Set(codes.map((item) => String(new Date(item.createdAt).getFullYear())))].sort((a, b) => Number(b) - Number(a)), [codes])
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return codes
+      .filter((item) => yearFilter === 'all' || String(new Date(item.createdAt).getFullYear()) === yearFilter)
+      .filter((item) => statusFilter === 'all' || describeExpiry(item.expiresAt).expired === (statusFilter === 'expired'))
+      .filter((item) => !needle || item.label.toLowerCase().includes(needle) || item.tripIds.some((id) => tripTitle(id).toLowerCase().includes(needle)))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codes, query, yearFilter, statusFilter, trips])
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePage = Math.min(page, pageCount)
+  const pageItems = filtered.slice((safePage - 1) * pageSize, safePage * pageSize)
+  useEffect(() => { setPage(1) }, [query, yearFilter, statusFilter, pageSize])
+
   const copyLabel = copyStatus === 'copied' ? '已複製' : copyStatus === 'failed' ? '複製失敗' : '複製'
 
   return <section className="access-admin">
@@ -533,45 +574,76 @@ function AccessCodePanel({ trips }: AccessCodePanelProps) {
     </div>}
 
     <div className="access-code-list">
-      <h3>已發放的通行碼</h3>
+      <div className="access-list-head">
+        <h3>已發放的通行碼 <small>{filtered.length} / {codes.length}</small></h3>
+        <div className="access-filters">
+          <input type="search" aria-label="搜尋通行碼" placeholder="搜尋用途或旅程" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <select aria-label="建立年份" value={yearFilter} onChange={(event) => setYearFilter(event.target.value)}>
+            <option value="all">所有年份</option>
+            {years.map((year) => <option key={year} value={year}>{year} 年</option>)}
+          </select>
+          <select aria-label="狀態" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">所有狀態</option>
+            <option value="active">有效</option>
+            <option value="expired">已到期</option>
+          </select>
+          <select aria-label="每頁筆數" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+            {[5, 10, 20].map((size) => <option key={size} value={size}>每頁 {size} 筆</option>)}
+          </select>
+        </div>
+      </div>
       {listError && <p className="notice danger" role="alert">{listError}</p>}
       {revokeError && <p className="notice danger" role="alert">{revokeError}</p>}
-      {loadingCodes && !listError && <p className="access-admin-description">正在讀取通行碼…</p>}
+      {loadingCodes && !listError && <SkeletonRows count={4} />}
       {!loadingCodes && !listError && !codes.length && <div className="empty"><span><KeyShieldIcon size={28} /></span><strong>尚未發放任何訪客通行碼</strong></div>}
-      {codes.map((item) => {
-        const expiry = describeExpiry(item.expiresAt)
-        const isEditing = editingId === item.id
-        const isSaving = savingId === item.id
-        return <article className={`access-code-item${expiry.expired ? ' is-expired' : ''}`} key={item.id}>
-          <div>
-            <strong>{item.label}</strong>
-            <small>{new Date(item.createdAt).toLocaleDateString('zh-TW')} 建立 · {expiry.text}</small>
-          </div>
-          <p>{item.tripIds.length ? item.tripIds.map(tripTitle).join('、') : '未指派旅程'}</p>
-          <div className="access-code-actions">
-            <button type="button" className="small-action" disabled={revokingId === item.id || isSaving} onClick={() => isEditing ? cancelEdit() : startEdit(item)}>{isEditing ? '取消編輯' : '編輯'}</button>
-            <button type="button" className="small-action" disabled={revokingId === item.id || isSaving} onClick={() => void revoke(item)}>{revokingId === item.id ? '撤銷中…' : '撤銷'}</button>
-          </div>
-          {isEditing && <form className="access-code-edit" onSubmit={(event) => { event.preventDefault(); void saveEdit(item) }}>
-            <fieldset className="access-trip-picker">
-              <legend>可查看的旅程</legend>
-              {trips.map((trip) => <label key={trip.id} className="access-trip-option">
-                <input type="checkbox" checked={editTripIds.includes(trip.id)} onChange={() => toggleEditTrip(trip.id)} />
-                <span>{trip.title}</span>
-                <small>{trip.destination}</small>
-              </label>)}
-            </fieldset>
-            <label htmlFor={`access-edit-expiry-${item.id}`}>到期時間</label>
-            <select id={`access-edit-expiry-${item.id}`} value={editExpiry} onChange={(event) => setEditExpiry(event.target.value)}>
-              <option value="unchanged">不變更</option>
-              {accessExpiryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-            <p className="access-admin-description">延長或變更到期時間會從現在起重新計算。已到期的通行碼延長後，訪客需重新輸入通行碼。</p>
-            {editError && <p className="notice danger" role="alert">{editError}</p>}
-            <button type="submit" disabled={isSaving || !editTripIds.length}>{isSaving ? '正在儲存…' : '儲存變更'}</button>
-          </form>}
-        </article>
-      })}
+      {!loadingCodes && codes.length > 0 && !filtered.length && <div className="empty"><strong>沒有符合條件的通行碼</strong></div>}
+      {pageItems.length > 0 && <div className="access-table-wrap"><table className="access-table">
+        <thead><tr><th>用途名稱</th><th>建立日期</th><th>到期</th><th>旅程</th><th aria-label="操作" /></tr></thead>
+        <tbody>
+          {pageItems.map((item) => {
+            const expiry = describeExpiry(item.expiresAt)
+            const isEditing = editingId === item.id
+            const isSaving = savingId === item.id
+            return <Fragment key={item.id}>
+              <tr className={expiry.expired ? 'is-expired' : ''}>
+                <td><strong>{item.label}</strong></td>
+                <td>{new Date(item.createdAt).toLocaleDateString('zh-TW')}</td>
+                <td className="access-expiry">{expiry.text}</td>
+                <td className="access-trips-cell">{item.tripIds.length ? item.tripIds.map(tripTitle).join('、') : '未指派旅程'}</td>
+                <td className="access-code-actions">
+                  <button type="button" className="small-action" disabled={revokingId === item.id || isSaving} onClick={() => isEditing ? cancelEdit() : startEdit(item)}>{isEditing ? '取消編輯' : '編輯'}</button>
+                  <button type="button" className="small-action" disabled={revokingId === item.id || isSaving} onClick={() => void revoke(item)}>{revokingId === item.id ? '撤銷中…' : '撤銷'}</button>
+                </td>
+              </tr>
+              {isEditing && <tr className="access-edit-row"><td colSpan={5}>
+                <form className="access-code-edit" onSubmit={(event) => { event.preventDefault(); void saveEdit(item) }}>
+                  <fieldset className="access-trip-picker">
+                    <legend>可查看的旅程</legend>
+                    {trips.map((trip) => <label key={trip.id} className="access-trip-option">
+                      <input type="checkbox" checked={editTripIds.includes(trip.id)} onChange={() => toggleEditTrip(trip.id)} />
+                      <span>{trip.title}</span>
+                      <small>{trip.destination}</small>
+                    </label>)}
+                  </fieldset>
+                  <label htmlFor={`access-edit-expiry-${item.id}`}>到期時間</label>
+                  <select id={`access-edit-expiry-${item.id}`} value={editExpiry} onChange={(event) => setEditExpiry(event.target.value)}>
+                    <option value="unchanged">不變更</option>
+                    {accessExpiryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <p className="access-admin-description">延長或變更到期時間會從現在起重新計算。已到期的通行碼延長後，訪客需重新輸入通行碼。</p>
+                  {editError && <p className="notice danger" role="alert">{editError}</p>}
+                  <button type="submit" disabled={isSaving || !editTripIds.length}>{isSaving ? '正在儲存…' : '儲存變更'}</button>
+                </form>
+              </td></tr>}
+            </Fragment>
+          })}
+        </tbody>
+      </table></div>}
+      {filtered.length > pageSize && <div className="access-pager">
+        <button type="button" className="small-action" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>上一頁</button>
+        <span>第 {safePage} / {pageCount} 頁</span>
+        <button type="button" className="small-action" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>下一頁</button>
+      </div>}
     </div>
   </section>
 }
@@ -835,7 +907,7 @@ function App() {
     }
   }
 
-  if (authLoading || (authRole && loading)) return <main className="load-error">正在確認登入權限與旅程資料…</main>
+  if (authLoading || (authRole && loading)) return <PageSkeleton message="正在確認登入權限與旅程資料…" />
   if (!authConfigured || !authRole) {
     return <AccessGate
       configured={authConfigured}
@@ -847,7 +919,7 @@ function App() {
       onSynologyLogin={startSynologyLogin}
     />
   }
-  if (loading) return <main className="load-error">正在讀取 NAS 旅程資料…</main>
+  if (loading) return <PageSkeleton message="正在讀取 NAS 旅程資料…" />
   if (loadError || !workspace || !trip) return <main className="load-error" role="alert"><h1>無法開啟旅程</h1><p>{loadError || '目前沒有有效的旅程資料。'}</p><button className="access-logout" onClick={() => void handleLogout()}>登出</button></main>
   const activeTripId = trip.id
   const activeTripStatus = getTripStatus(trip.startDate, trip.endDate, trip.timeZone, statusTime)
@@ -855,6 +927,11 @@ function App() {
     getTripStatus(item.startDate, item.endDate, item.timeZone, statusTime) !== 'ended')
   const archivedTrips = workspace.trips.filter((item) =>
     getTripStatus(item.startDate, item.endDate, item.timeZone, statusTime) === 'ended')
+
+  const tripContext = !['overview', 'timeline', 'archive', 'docs', 'access'].includes(tab)
+  const sidebarTrips = tripContext && !currentTrips.slice(0, 3).some((item) => item.id === activeTripId)
+    ? [trip, ...currentTrips.slice(0, 2)]
+    : currentTrips.slice(0, 3)
 
   function renderTripLinks(trips: Trip[]) {
     return trips.map((item) => {
@@ -894,7 +971,7 @@ function App() {
         <button className="brand" aria-label="途間首頁：我的旅程" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}><span className="brand-mark"><BrandSparkIcon size={18} /></span><span>途間 <small>TRIP STUDIO</small></span></button>
         <div className="nav-label">你的旅程 <span className="trip-count">{currentTrips.length}</span></div>
         <button className={`side-link ${tab === 'timeline' ? 'active' : ''}`} onClick={() => { setTab('timeline'); setMobileNavOpen(false) }}><span className="side-link-icon"><ClockIcon size={18} /></span><span>旅程時間軸</span></button>
-        <div className="trip-list">{renderTripLinks(currentTrips.slice(0, 3))}</div>
+        <div className="trip-list">{renderTripLinks(sidebarTrips)}</div>
         {currentTrips.length > 3 && <button className="trip-list-more" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}>瀏覽更多</button>}
         <div className="nav-label nav-section">這趟旅程</div>
         <button className={`side-link ${tab === 'itinerary' ? 'active' : ''}`} onClick={() => { setTab('itinerary'); setMobileNavOpen(false) }}><span className="side-link-icon"><CalendarGridIcon size={18} /></span><span>每日行程</span></button>
@@ -926,7 +1003,7 @@ function App() {
           {saveError && <p className="notice danger" role="alert">SQLite 儲存失敗：{saveError}</p>}
           {authError && <p className="notice danger" role="alert">{authError}</p>}
           {tab === 'docs' ? (
-            <Suspense fallback={<div className="load-error">正在載入系統說明文件…</div>}>
+            <Suspense fallback={<SkeletonRows count={5} />}>
               <DocsPanel />
             </Suspense>
           ) : tab === 'access' && authRole === 'admin' ? (
@@ -1089,7 +1166,7 @@ function App() {
             </div>
           </>}
           {tab === 'map' && (
-            <Suspense fallback={<div className="load-error">正在載入行程地圖…</div>}>
+            <Suspense fallback={<SkeletonRows count={6} />}>
               <TripMapPanel
                 trip={trip}
                 authRole={authRole}
