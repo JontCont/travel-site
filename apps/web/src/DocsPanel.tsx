@@ -222,6 +222,107 @@ export function DocsPanel() {
                 </tbody>
               </table>
             </div>
+
+            <h4>怎麼撰寫：先選模式，再改內容</h4>
+            <ol>
+              <li>在左側選單進入 <code>JSON 編輯器</code>（僅管理員可見）。</li>
+              <li>上方切換 <code>當前旅程</code>（只含這一趟旅程）或 <code>全部工作區</code>（含 <code>trips</code> 與 <code>activeTripId</code>）。一般修改請用「當前旅程」，風險較小。</li>
+              <li>直接在編輯器內修改文字，標題旁出現 <code>●</code> 代表尚有未儲存的變更。</li>
+              <li>下方狀態列顯示「驗證通過」後，按 <code>儲存並套用</code> 或 <kbd>Ctrl</kbd> + <kbd>S</kbd> 寫入資料庫；若顯示問題清單，需先修正才能儲存。</li>
+              <li>改壞了可按 <code>還原</code> 回到上次儲存的內容；切換模式或旅程時若有未儲存內容會先詢問確認。</li>
+            </ol>
+
+            <h4>旅程 (Trip) 欄位說明</h4>
+            <div className="doc-table-wrap">
+              <table className="doc-table">
+                <thead><tr><th>欄位</th><th>型別</th><th>必填</th><th>說明與範例</th></tr></thead>
+                <tbody>
+                  <tr><td><code>id</code></td><td>字串</td><td>是</td><td>旅程唯一代碼，不可與其他旅程重複，建議不要在建立後更改（通行碼會依此指派旅程），例如 <code>"trip-japan-2024"</code>。</td></tr>
+                  <tr><td><code>title</code></td><td>字串</td><td>是</td><td>旅程名稱，例如 <code>"2024 日本關西"</code>。</td></tr>
+                  <tr><td><code>destination</code></td><td>字串</td><td>是</td><td>目的地，例如 <code>"日本 · 關西"</code>。</td></tr>
+                  <tr><td><code>country</code></td><td>字串</td><td>是</td><td>國家名稱，可為空字串；中國旅程會改用高德地圖，其他國家使用 Google 地圖。</td></tr>
+                  <tr><td><code>startDate</code> / <code>endDate</code></td><td>字串</td><td>是</td><td>格式 <code>YYYY-MM-DD</code>，結束日不可早於開始日。</td></tr>
+                  <tr><td><code>timeZone</code></td><td>字串</td><td>是</td><td>IANA 時區，例如 <code>"Asia/Tokyo"</code>、<code>"Asia/Shanghai"</code>。</td></tr>
+                  <tr><td><code>description</code></td><td>字串</td><td>是</td><td>旅程簡介，可為空字串。</td></tr>
+                  <tr><td><code>hotelName</code> / <code>hotelAddress</code></td><td>字串</td><td>是</td><td>住宿名稱與地址，無住宿可留空字串；<code>hotelCoordinates</code> 為選填座標。</td></tr>
+                  <tr><td><code>days</code></td><td>物件</td><td>是</td><td>以日期為 key，值為景點陣列。<strong>key 必須與開始～結束日期逐日完全對應</strong>，多一天或少一天都會驗證失敗；當天沒有行程請填 <code>[]</code>。</td></tr>
+                  <tr><td><code>travelers</code></td><td>陣列</td><td>是</td><td>同行旅客，可為 <code>[]</code>。</td></tr>
+                  <tr><td><code>outboundFlight</code> / <code>returnFlight</code></td><td>物件</td><td>否</td><td>去程 / 回程航班，若填寫，下列 8 個欄位都必須存在且為字串。</td></tr>
+                  <tr><td><code>notepad</code>、<code>photoShareUrl</code>、<code>aiAskEnabled</code></td><td>—</td><td>否</td><td>記事本內容、相簿分享連結、是否開啟 AI 詢問。</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h4>景點 (Stop) 欄位說明</h4>
+            <div className="doc-table-wrap">
+              <table className="doc-table">
+                <thead><tr><th>欄位</th><th>必填</th><th>說明</th></tr></thead>
+                <tbody>
+                  <tr><td><code>id</code></td><td>是</td><td>景點唯一代碼，同一份資料中不要重複，例如 <code>"d1-kiyomizu"</code>。</td></tr>
+                  <tr><td><code>name</code></td><td>是</td><td>景點名稱。</td></tr>
+                  <tr><td><code>address</code></td><td>是</td><td>地址，可為空字串。</td></tr>
+                  <tr><td><code>time</code></td><td>是</td><td>抵達時間，24 小時制 <code>HH:mm</code>，例如 <code>"09:30"</code>。</td></tr>
+                  <tr><td><code>duration</code></td><td>是</td><td>停留分鐘數（數字，不可為負）。</td></tr>
+                  <tr><td><code>coordinates</code></td><td>是</td><td>座標字串，格式 <code>"經度,緯度"</code>（注意經度在前），中國景點使用高德 GCJ-02；尚未確認請填 <code>""</code>。</td></tr>
+                  <tr><td><code>durationMax</code></td><td>否</td><td>最長停留分鐘數，必須大於或等於 <code>duration</code>。</td></tr>
+                  <tr><td><code>notes</code></td><td>否</td><td>備註。</td></tr>
+                  <tr><td><code>hideFromMap</code></td><td>否</td><td><code>true</code> 代表非地點行程（如「搭車」「午休」），不顯示於地圖也不計算移動路線。</td></tr>
+                  <tr><td><code>openingHours</code></td><td>否</td><td>營業時間文字；搭配 <code>openingHoursStatus</code>（只能是 <code>"unverified"</code> 或 <code>"confirmed"</code>）、<code>openingHoursSource</code>、<code>openingHoursCheckedAt</code> 標示是否已查證與來源。</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h4>範例：一趟 2 天的旅程</h4>
+            <pre className="doc-code" style={{ overflowX: 'auto', padding: 14, borderRadius: 10, background: '#1e1e1e', color: '#d4d4d4', fontSize: 12, lineHeight: 1.6 }}><code>{`{
+  "id": "trip-demo-2025",
+  "title": "2025 東京小旅行",
+  "destination": "日本 · 東京",
+  "country": "日本",
+  "startDate": "2025-05-01",
+  "endDate": "2025-05-02",
+  "timeZone": "Asia/Tokyo",
+  "description": "兩天一夜東京散步",
+  "hotelName": "Shinjuku Hotel",
+  "hotelAddress": "東京都新宿區 1-1-1",
+  "days": {
+    "2025-05-01": [
+      {
+        "id": "d1-senso-ji",
+        "name": "淺草寺",
+        "address": "東京都台東區淺草 2-3-1",
+        "time": "10:00",
+        "duration": 90,
+        "durationMax": 120,
+        "coordinates": "139.7966,35.7148",
+        "notes": "雷門前拍照"
+      },
+      {
+        "id": "d1-move",
+        "name": "搭電車前往新宿",
+        "address": "",
+        "time": "12:00",
+        "duration": 40,
+        "coordinates": "",
+        "hideFromMap": true
+      }
+    ],
+    "2025-05-02": []
+  },
+  "travelers": [
+    { "id": "t1", "name": "小明", "outbound": "12A", "inbound": "12B" }
+  ]
+}`}</code></pre>
+
+            <h4>撰寫小技巧與常見錯誤</h4>
+            <ul>
+              <li><strong>JSON 語法</strong>：key 與字串一律使用雙引號；最後一個項目後<strong>不能</strong>有逗號；不可加註解。</li>
+              <li><strong>延長或縮短旅程日期</strong>：修改 <code>startDate</code> / <code>endDate</code> 的同時，必須同步新增或刪除 <code>days</code> 內對應的日期 key。</li>
+              <li><strong>調整景點順序</strong>：移動陣列內物件的位置即可，同一天的景點依陣列順序顯示。</li>
+              <li><strong>貼上新景點</strong>：複製既有景點整段 <code>{'{ ... }'}</code>，並務必改成新的 <code>id</code>。</li>
+              <li><strong>全部工作區模式</strong>：<code>activeTripId</code> 必須對應 <code>trips</code> 內存在的旅程 <code>id</code>，且各旅程 <code>id</code> 不可重複；至少要保留一趟旅程。</li>
+              <li><strong>儲存前先備份</strong>：大幅修改前建議在「全部工作區」模式複製整份 JSON 存檔，儲存後會直接覆寫資料庫。</li>
+              <li><strong>常見錯誤訊息</strong>：<code>days 物件缺少日期 key</code> 表示日期與 <code>days</code> 不一致；<code>結構不符合 Trip 定義</code> 通常是景點 <code>time</code> 格式錯誤、<code>duration</code> 寫成文字，或缺少必填欄位。</li>
+            </ul>
           </div>
         ),
       },
