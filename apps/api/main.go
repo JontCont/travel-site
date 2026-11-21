@@ -16,6 +16,39 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func resolveStaticFile(distDir, reqPath string) (string, bool) {
+	absDist, err := filepath.Abs(distDir)
+	if err != nil {
+		return filepath.Join(distDir, "index.html"), false
+	}
+	fallback := filepath.Join(absDist, "index.html")
+
+	cleanRel := filepath.Clean(strings.TrimPrefix(reqPath, "/"))
+	if cleanRel == "." || cleanRel == ".." || strings.HasPrefix(cleanRel, ".."+string(filepath.Separator)) {
+		return fallback, false
+	}
+
+	absTarget, err := filepath.Abs(filepath.Join(absDist, cleanRel))
+	if err != nil {
+		return fallback, false
+	}
+	if !strings.HasPrefix(absTarget, absDist+string(filepath.Separator)) {
+		return fallback, false
+	}
+
+	rel, err := filepath.Rel(absDist, absTarget)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fallback, false
+	}
+
+	fi, err := os.Stat(absTarget)
+	if err != nil || fi.IsDir() {
+		return fallback, false
+	}
+
+	return absTarget, true
+}
+
 func findDistDir() string {
 	candidates := []string{
 		"../web/dist",
@@ -112,23 +145,13 @@ func main() {
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Header("X-Robots-Tag", "noindex, nofollow")
 
-		cleanRel := filepath.Clean(strings.TrimPrefix(reqPath, "/"))
-		targetFile := filepath.Join(distDir, cleanRel)
-
-		fi, err := os.Stat(targetFile)
-		if err == nil && !fi.IsDir() {
-			if strings.HasSuffix(targetFile, "index.html") {
-				c.Header("Cache-Control", "no-cache")
-			} else {
-				c.Header("Cache-Control", "public, max-age=31536000, immutable")
-			}
-			c.File(targetFile)
-			return
+		targetFile, isAsset := resolveStaticFile(distDir, reqPath)
+		if !isAsset || strings.HasSuffix(targetFile, "index.html") {
+			c.Header("Cache-Control", "no-cache")
+		} else {
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
 		}
-
-		// Fallback to SPA index.html
-		c.Header("Cache-Control", "no-cache")
-		c.File(filepath.Join(distDir, "index.html"))
+		c.File(targetFile)
 	})
 
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)

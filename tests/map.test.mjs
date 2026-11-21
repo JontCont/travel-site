@@ -12,6 +12,7 @@ test('builds Google directions links without computed distance', () => {
 
 test('China trips keep AMap and do not use Google links', () => {
   assert.equal(isChinaTrip('中國'), true)
-  const url = buildTripMapSearchUrl({ country: '中國', destination: '上海' }, '外灘', '')
-  assert.equal(url.includes('google.com'), false)
+  const url = new URL(buildTripMapSearchUrl({ country: '中國', destination: '上海' }, '外灘', ''))
+  assert.equal(url.hostname, 'uri.amap.com')
+  assert.equal(url.hostname !== 'google.com' && !url.hostname.endsWith('.google.com'), true)
 })
