@@ -67,15 +67,15 @@
 .notepad-readonly { min-height: 170px; padding: 16px; border: 1px solid #e5ebe3; border-radius: 8px; color: #52665a; font-size: 13px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .load-error { max-width: 620px; margin: 15vh auto; padding: 36px; background: white; border-radius: 12px; color: #a84639; }
 .app-shell { display: flex; min-height: 100vh; }
-.sidebar { width: 230px; flex-shrink: 0; background: #17382e; color: #d8e2d5; padding: 30px 18px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.sidebar { width: 230px; flex-shrink: 0; align-self: flex-start; background: #17382e; color: #d8e2d5; padding: 30px 18px; display: flex; flex-direction: column; position: sticky; top: 0; min-height: 100vh; }
 .brand { color: white; display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 25px; letter-spacing: .04em; padding: 0 12px; width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .brand-mark { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; background: #d0eabc; color: #1b3d2f; width: 34px; height: 34px; border-radius: 10px; box-shadow: inset 0 0 0 1px rgba(27, 61, 47, 0.08); }
 .brand small { display: block; font-size: 9px; font-weight: 500; letter-spacing: .28em; color: #abc2ae; margin-top: 1px; }
 .nav-label { color: #91af9d; font-size: 11px; letter-spacing: .18em; margin: 28px 14px 17px; }
 .nav-label.nav-section { margin: 23px 14px 12px; }.trip-count { display: inline-grid; place-items: center; min-width: 19px; height: 19px; margin-left: 6px; padding: 0 5px; border-radius: 10px; background: #315546; color: #d4e5d5; letter-spacing: 0; }
-.trip-list { display: grid; gap: 5px; max-height: 30vh; overflow: auto; }.trip-link { padding: 10px 12px; border: 0; background: transparent; color: #c0d2c3; border-radius: 8px; text-align: left; }.trip-link strong, .trip-link small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.trip-link strong { font-size: 12px; }.trip-link small { font-size: 10px; opacity: .72; margin-top: 4px; }.trip-link:hover, .trip-link.active { background: #315546; color: white; }
-.trip-link strong { display: flex; align-items: center; justify-content: space-between; gap: 6px; overflow: visible; }
-.trip-link-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.trip-list { display: block; }.trip-link { display: block; width: 100%; min-width: 0; padding: 10px 12px; border: 0; background: transparent; color: #c0d2c3; border-radius: 8px; text-align: left; cursor: pointer; }.trip-link + .trip-link { margin-top: 5px; }.trip-link small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; opacity: .72; margin-top: 4px; }.trip-link:hover, .trip-link.active { background: #315546; color: white; }
+.trip-link strong { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; font-size: 12px; }
+.trip-link-title { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trip-status-badge { display: inline-flex; align-items: center; flex-shrink: 0; padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 1.2; letter-spacing: 0; white-space: nowrap; }
 .trip-status-badge.status-scheduled { color: #61764f; background: #edf3e7; }
 .trip-status-badge.status-in-progress { color: #2f704b; background: #e6f2e7; }
@@ -106,6 +106,8 @@
 .main { flex: 1; min-width: 0; }
 .topbar { height: 70px; background: white; border-bottom: 1px solid #e9ede8; display: flex; justify-content: space-between; align-items: center; padding: 0 max(34px, calc((100% - 1190px)/2)); font-size: 13px; color: #52665a; }
 .topbar-back { display: none; align-items: center; gap: 3px; background: none; color: #356348; border: 0; padding: 5px 0; font-size: 13px; cursor: pointer; }
+.topbar-link { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.topbar-link:hover { color: #29563c; text-decoration: underline; text-underline-offset: 3px; }
 .slash { color: #aab8af; padding: 0 12px; }.top-right { color: #81958b; }
 .content { max-width: 1260px; margin: auto; padding: 38px 34px 80px; }
 .eyebrow, .overline { color: #8da395; font-size: 10px; font-weight: 700; letter-spacing: .22em; }
@@ -326,7 +328,7 @@
       display: block !important;
     }
     .trip-list {
-      display: grid !important;
+      display: block !important;
     }
     .side-link-icon {
       display: inline-flex !important;

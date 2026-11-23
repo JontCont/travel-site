@@ -1013,7 +1013,7 @@ function App() {
           <div className="topbar-left">
             <button className="mobile-menu-button" aria-label="選單" onClick={() => setMobileNavOpen((open) => !open)}>{mobileNavOpen ? <CloseIcon size={18} /> : <MenuIcon size={18} />}</button>
             {tab !== 'overview' && tab !== 'timeline' && tab !== 'archive' && <button className="topbar-back" onClick={() => setTab('overview')}><ChevronLeftIcon size={15} /> 我的旅程</button>}
-            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? '我的旅程 / 旅程時間軸' : tab === 'archive' ? '我的旅程 / 封存' : tab === 'docs' ? '系統 / 使用手冊與說明文件' : tab === 'access' ? '管理 / 訪客通行碼' : <>我的旅程 <span className="slash">/</span> {trip.title}</>}</span>
+            <span className="topbar-title">{tab === 'overview' ? '我的旅程' : tab === 'timeline' ? <><button type="button" className="topbar-link" onClick={() => setTab('overview')}>我的旅程</button><span className="slash">/</span>旅程時間軸</> : tab === 'archive' ? <><button type="button" className="topbar-link" onClick={() => setTab('overview')}>我的旅程</button><span className="slash">/</span>封存</> : tab === 'docs' ? '系統 / 使用手冊與說明文件' : tab === 'access' ? '管理 / 訪客通行碼' : <><button type="button" className="topbar-link" onClick={() => setTab('overview')}>我的旅程</button><span className="slash">/</span><button type="button" className="topbar-link" onClick={() => setTab('trip-overview')}>{trip.title}</button></>}</span>
           </div>
           <span className="top-right">{workspace.trips.length} 趟旅程 · {roleLabels[authRole]}</span>
           <button className="logout-button" onClick={() => void handleLogout()}>登出</button>
