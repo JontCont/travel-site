@@ -322,8 +322,11 @@
       padding: 0 8px;
       justify-content: flex-start;
     }
-    .brand > span:nth-child(2), .nav-label, .side-link > span:not(.side-link-icon), .sidebar-bottom, .trip-list {
+    .brand > span:nth-child(2), .nav-label, .side-link > span:not(.side-link-icon), .sidebar-bottom {
       display: block !important;
+    }
+    .trip-list {
+      display: grid !important;
     }
     .side-link-icon {
       display: inline-flex !important;

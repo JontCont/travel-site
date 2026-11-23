@@ -660,7 +660,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'itinerary' | 'map' | 'flights' | 'travelers' | 'notepad' | 'photos' | 'settings' | 'access' | 'json-editor' | 'docs'>('overview')
+  const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'trip-overview' | 'itinerary' | 'map' | 'notepad' | 'photos' | 'settings' | 'access' | 'json-editor' | 'docs'>('overview')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [statusTime, setStatusTime] = useState(() => new Date())
   const [editing, setEditing] = useState<string | null>(null)
@@ -974,10 +974,9 @@ function App() {
         <div className="trip-list">{renderTripLinks(sidebarTrips)}</div>
         {currentTrips.length > 3 && <button className="trip-list-more" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}>瀏覽更多</button>}
         <div className="nav-label nav-section">這趟旅程</div>
+        <button className={`side-link ${tab === 'trip-overview' ? 'active' : ''}`} onClick={() => { setTab('trip-overview'); setMobileNavOpen(false) }}><span className="side-link-icon"><CompassRocketIcon size={18} /></span><span>總覽</span></button>
         <button className={`side-link ${tab === 'itinerary' ? 'active' : ''}`} onClick={() => { setTab('itinerary'); setMobileNavOpen(false) }}><span className="side-link-icon"><CalendarGridIcon size={18} /></span><span>每日行程</span></button>
         <button className={`side-link ${tab === 'map' ? 'active' : ''}`} onClick={() => { setTab('map'); setMobileNavOpen(false) }}><span className="side-link-icon"><MapPinIcon size={18} /></span><span>地點地圖</span></button>
-        <button className={`side-link ${tab === 'flights' ? 'active' : ''}`} onClick={() => { setTab('flights'); setMobileNavOpen(false) }}><span className="side-link-icon"><PlaneIcon size={18} /></span><span>航班與住宿</span></button>
-        <button className={`side-link ${tab === 'travelers' ? 'active' : ''}`} onClick={() => { setTab('travelers'); setMobileNavOpen(false) }}><span className="side-link-icon"><UsersIcon size={18} /></span><span>同行旅客</span></button>
         {authRole === 'admin' && <button className={`side-link ${tab === 'json-editor' ? 'active' : ''}`} onClick={() => { setTab('json-editor'); setMobileNavOpen(false) }}><span className="side-link-icon"><CodeBracesIcon size={18} /></span><span>JSON 編輯器</span></button>}
         <div className="nav-label nav-section">系統</div>
         <button className={`side-link ${tab === 'docs' ? 'active' : ''}`} onClick={() => { setTab('docs'); setMobileNavOpen(false) }}><span className="side-link-icon"><BookOpenIcon size={18} /></span><span>系統說明文件</span></button>
@@ -1065,6 +1064,16 @@ function App() {
             </div>}
             {tab === 'archive' && renderTripCards(archivedTrips)}
           </section> : <>
+          <nav className="tabs" aria-label="旅程分頁">
+            <button className={tab === 'trip-overview' ? 'selected' : ''} onClick={() => setTab('trip-overview')}>總覽</button>
+            <button className={tab === 'itinerary' ? 'selected' : ''} onClick={() => setTab('itinerary')}>每日行程</button>
+            <button className={tab === 'map' ? 'selected' : ''} onClick={() => setTab('map')}>地點地圖</button>
+            <button className={tab === 'notepad' ? 'selected' : ''} onClick={() => setTab('notepad')}>記事本</button>
+            <button className={tab === 'photos' ? 'selected' : ''} onClick={() => setTab('photos')}>相簿</button>
+            {authRole === 'admin' && <button className={tab === 'settings' ? 'selected' : ''} onClick={() => setTab('settings')}>設定</button>}
+            {authRole === 'admin' && <button className={tab === 'json-editor' ? 'selected' : ''} onClick={() => setTab('json-editor')}>JSON 編輯</button>}
+          </nav>
+          {tab === 'trip-overview' && <>
           <div className="eyebrow"><span className={`trip-status-badge status-${activeTripStatus}`}>{tripStatusLabels[activeTripStatus]}</span><span className="eyebrow-rule" /></div>
           <section className="hero">
             <div className="hero-content">
@@ -1091,20 +1100,11 @@ function App() {
             <div className="hero-index">{String(workspace.trips.indexOf(trip) + 1).padStart(2, '0')} / {trip.destination.toUpperCase()}</div>
           </section>
           <div className="summary-row">
-            <button className="summary-card" onClick={() => setTab('flights')}><span className="summary-icon peach"><PlaneIcon size={19} /></span><span><strong>航班資訊</strong><small>{trip.outboundFlight ? `${trip.outboundFlight.airline} · ${trip.outboundFlight.number}${trip.returnFlight ? ` / ${trip.returnFlight.number}` : ''}` : '尚未新增航班資料'}</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></button>
-            {trip.hotelName ? <a className="summary-card" href={buildTripMapSearchUrl(trip, trip.hotelName, trip.hotelAddress)} target="_blank" rel="noreferrer"><span className="summary-icon green"><HotelIcon size={19} /></span><span><strong>入住住宿</strong><small>{trip.hotelName}</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></a> : <button className="summary-card" onClick={() => setTab('flights')}><span className="summary-icon green"><HotelIcon size={19} /></span><span><strong>入住住宿</strong><small>尚未新增住宿資訊</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></button>}
-            <button className="summary-card" onClick={() => setTab('travelers')}><span className="summary-icon blue"><UsersIcon size={19} /></span><span><strong>同行旅客</strong><small>{trip.travelers.length ? `已儲存 ${trip.travelers.length} 位` : '尚未新增旅客'}</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></button>
+            <button className="summary-card" onClick={() => document.getElementById('trip-flights')?.scrollIntoView({ behavior: 'smooth' })}><span className="summary-icon peach"><PlaneIcon size={19} /></span><span><strong>航班資訊</strong><small>{trip.outboundFlight ? `${trip.outboundFlight.airline} · ${trip.outboundFlight.number}${trip.returnFlight ? ` / ${trip.returnFlight.number}` : ''}` : '尚未新增航班資料'}</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></button>
+            {trip.hotelName ? <a className="summary-card" href={buildTripMapSearchUrl(trip, trip.hotelName, trip.hotelAddress)} target="_blank" rel="noreferrer"><span className="summary-icon green"><HotelIcon size={19} /></span><span><strong>入住住宿</strong><small>{trip.hotelName}</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></a> : <button className="summary-card" onClick={() => document.getElementById('trip-flights')?.scrollIntoView({ behavior: 'smooth' })}><span className="summary-icon green"><HotelIcon size={19} /></span><span><strong>入住住宿</strong><small>尚未新增住宿資訊</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></button>}
+            <button className="summary-card" onClick={() => document.getElementById('trip-travelers')?.scrollIntoView({ behavior: 'smooth' })}><span className="summary-icon blue"><UsersIcon size={19} /></span><span><strong>同行旅客</strong><small>{trip.travelers.length ? `已儲存 ${trip.travelers.length} 位` : '尚未新增旅客'}</small></span><span className="arrow"><ArrowUpRightIcon size={15} /></span></button>
           </div>
-          <nav className="tabs" aria-label="旅程分頁">
-            <button className={tab === 'itinerary' ? 'selected' : ''} onClick={() => setTab('itinerary')}>每日行程</button>
-            <button className={tab === 'map' ? 'selected' : ''} onClick={() => setTab('map')}>地點地圖</button>
-            <button className={tab === 'flights' ? 'selected' : ''} onClick={() => setTab('flights')}>航班與住宿</button>
-            <button className={tab === 'travelers' ? 'selected' : ''} onClick={() => setTab('travelers')}>旅客與座位</button>
-            <button className={tab === 'notepad' ? 'selected' : ''} onClick={() => setTab('notepad')}>記事本</button>
-            <button className={tab === 'photos' ? 'selected' : ''} onClick={() => setTab('photos')}>相簿</button>
-            {authRole === 'admin' && <button className={tab === 'settings' ? 'selected' : ''} onClick={() => setTab('settings')}>設定</button>}
-            {authRole === 'admin' && <button className={tab === 'json-editor' ? 'selected' : ''} onClick={() => setTab('json-editor')}>JSON 編輯</button>}
-          </nav>
+          </>}
           {tab === 'itinerary' && <>
             <div className="section-heading"><div><span className="overline">YOUR ITINERARY</span><h2>每天，都有新的風景。</h2></div><span className="muted">當地時間 · {trip.timeZone}</span></div>
             <div className="day-tabs" role="tablist" aria-label="選擇日期">
@@ -1193,7 +1193,7 @@ function App() {
               <div className="form-actions"><button type="submit">儲存相簿連結</button></div>
             </form>
           </div>}
-          {tab === 'flights' && <div className="details-grid">
+          {tab === 'trip-overview' && <div id="trip-flights" className="details-grid">
             {(['outboundFlight', 'returnFlight'] as const).map((direction) => {
               const flight = trip[direction]
               const isOutbound = direction === 'outboundFlight'
@@ -1248,7 +1248,7 @@ function App() {
             </div>
             <div className="detail-card"><span className="overline">BAGGAGE · PER PERSON</span><h2>每人行李額度</h2><div className="baggage"><div><span>個人物品</span><strong>{trip.personalItemPieces ?? '件數未提供'}{trip.personalItemPieces !== undefined ? ' 件' : ''}</strong></div><div><span>手提行李</span><strong>{trip.carryOnPieces ?? '件數未提供'}{trip.carryOnPieces !== undefined ? ' 件 · ' : ' · '}{trip.carryOnKg ?? '重量未提供'}{trip.carryOnKg !== undefined ? ' 公斤/件' : ''}</strong></div><div><span>託運行李</span><strong>{trip.checkedBagPieces ?? '件數未提供'}{trip.checkedBagPieces !== undefined ? ' 件 · ' : ' · '}{trip.checkedBagKg ?? '重量未提供'}{trip.checkedBagKg !== undefined ? ' 公斤/件' : ''}</strong></div></div><p>出發前請再次查閱訂單及航空公司規定。</p></div>
           </div>}
-          {tab === 'travelers' && <div className="travelers-panel">
+          {tab === 'trip-overview' && <div id="trip-travelers" className="travelers-panel">
             <div className="section-heading"><div><span className="overline">TRAVEL PARTY</span><h2>同行旅客與座位</h2></div></div>
             <p className="muted">座位資訊依提供的機票資料整理。</p>
             <div className="seat-flight-routes">
