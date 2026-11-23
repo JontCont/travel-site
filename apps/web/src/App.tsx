@@ -660,6 +660,8 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const pendingSaveToastRef = useRef(false)
   const [tab, setTab] = useState<'overview' | 'timeline' | 'archive' | 'trip-overview' | 'itinerary' | 'map' | 'notepad' | 'photos' | 'settings' | 'access' | 'json-editor' | 'docs'>('overview')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [statusTime, setStatusTime] = useState(() => new Date())
@@ -773,6 +775,12 @@ function App() {
 
 
   useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), 3000)
+    return () => window.clearTimeout(timer)
+  }, [toast])
+
+  useEffect(() => {
     if (loading || !workspace || authRole !== 'admin') return
     const version = ++saveVersion.current
     const snapshot = workspace
@@ -780,11 +788,22 @@ function App() {
       .catch(() => undefined)
       .then(() => saveWorkspace(snapshot))
       .then(() => {
-        if (saveVersion.current === version) setSaveError('')
+        if (saveVersion.current === version) {
+          setSaveError('')
+          if (pendingSaveToastRef.current) {
+            pendingSaveToastRef.current = false
+            setToast({ message: '設定已儲存', type: 'success' })
+          }
+        }
       })
       .catch((error: unknown) => {
         if (saveVersion.current === version) {
-          setSaveError(error instanceof Error ? error.message : '保存旅程資料失敗。')
+          const message = error instanceof Error ? error.message : '保存旅程資料失敗。'
+          setSaveError(message)
+          if (pendingSaveToastRef.current) {
+            pendingSaveToastRef.current = false
+            setToast({ message: `儲存失敗：${message}`, type: 'error' })
+          }
         }
       })
   }, [workspace, loading, authRole])
@@ -966,6 +985,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      {toast && <div className={`toast-alert toast-${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'}>{toast.message}</div>}
       {mobileNavOpen && <div className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
       <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
         <button className="brand" aria-label="途間首頁：我的旅程" onClick={() => { setTab('overview'); setMobileNavOpen(false) }}><span className="brand-mark"><BrandSparkIcon size={18} /></span><span>途間 <small>TRIP STUDIO</small></span></button>
@@ -1187,6 +1207,7 @@ function App() {
             <form key={trip.id} className="settings-form" onSubmit={(event) => {
               event.preventDefault()
               const value = String(new FormData(event.currentTarget).get('photoShareUrl') ?? '').trim()
+              pendingSaveToastRef.current = true
               updateTrip((current) => ({ ...current, photoShareUrl: value || undefined }))
             }}>
               <label>相簿連結（Immich 分享）<input name="photoShareUrl" type="url" placeholder="https://immich 分享連結" defaultValue={trip.photoShareUrl ?? ''} /></label>
